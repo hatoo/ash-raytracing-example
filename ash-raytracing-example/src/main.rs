@@ -924,7 +924,7 @@ fn main() {
                             .build(),
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(3)
-                            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_NV)
                             .binding(2)
                             .build(),
@@ -1139,7 +1139,7 @@ fn main() {
 
         let mut color_buffer = BufferResource::new(
             buffer_size,
-            vk::BufferUsageFlags::UNIFORM_BUFFER,
+            vk::BufferUsageFlags::STORAGE_BUFFER,
             vk::MemoryPropertyFlags::HOST_VISIBLE,
             &device,
             device_memory_properties,
@@ -1187,7 +1187,7 @@ fn main() {
             descriptor_count: 1,
         },
         vk::DescriptorPoolSize {
-            ty: vk::DescriptorType::UNIFORM_BUFFER,
+            ty: vk::DescriptorType::STORAGE_BUFFER,
             descriptor_count: 1,
         },
     ];
@@ -1277,7 +1277,7 @@ fn main() {
         .dst_set(descriptor_set)
         .dst_binding(2)
         .dst_array_element(0)
-        .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
         .buffer_info(&buffer_info)
         .build();
 

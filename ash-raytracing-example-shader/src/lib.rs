@@ -48,7 +48,7 @@ pub fn main_miss(#[spirv(incoming_ray_payload)] out: &mut Vec3) {
 pub fn main_closest_hit(
     #[spirv(incoming_ray_payload)] out: &mut Vec3,
     #[spirv(instance_id)] id: u32,
-    #[spirv(uniform, descriptor_set = 0, binding = 2)] colors: &[Vec3; 3],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] colors: &[Vec3],
 ) {
     *out = colors[id as usize];
 }
