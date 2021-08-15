@@ -1,6 +1,6 @@
-# ash-offscreen-rendering-example
+# ash-raytracing-example
 
-An example of offscreen rendering using [ash](https://github.com/MaikKlein/ash).
+An example of raytracing using [ash](https://github.com/MaikKlein/ash) and [rust-gpu](https://github.com/EmbarkStudios/rust-gpu).
 
 ## Run
 
