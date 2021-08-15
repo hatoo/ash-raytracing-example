@@ -941,7 +941,7 @@ fn main() {
         }
         .unwrap();
 
-        const SHADER: &[u8] = include_bytes!(env!("shader.spv"));
+        const SHADER: &[u8] = include_bytes!(env!("ash_raytracing_example_shader.spv"));
 
         let shader_module = unsafe { create_shader_module(&device, SHADER).unwrap() };
 
