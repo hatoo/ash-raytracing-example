@@ -59,7 +59,7 @@ pub fn main_ray_generation(
     #[spirv(launch_size)] launch_size: UVec3,
     #[spirv(descriptor_set = 0, binding = 0)] top_level_as: &AccelerationStructure,
     #[spirv(descriptor_set = 0, binding = 1)] image: &Image!(2D, format=rgba8, sampled=false),
-    // #[spirv(ray_payload)] payload: &mut Vec3,
+    #[spirv(ray_payload)] payload: &mut Vec3,
 ) {
     let pixel_center = vec2(launch_id.x as f32, launch_id.y as f32) + vec2(0.5, 0.5);
     let in_uv = pixel_center / vec2(launch_size.x as f32, launch_size.y as f32);
@@ -73,7 +73,7 @@ pub fn main_ray_generation(
     let tmin = 0.001;
     let tmax = 1000.0;
 
-    let mut payload = Vec3::ZERO;
+    *payload = Vec3::ZERO;
 
     unsafe {
         top_level_as.trace_ray(
@@ -86,7 +86,7 @@ pub fn main_ray_generation(
             tmin,
             direction,
             tmax,
-            &mut payload,
+            payload,
         );
     }
 
