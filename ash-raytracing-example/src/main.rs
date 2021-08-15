@@ -902,7 +902,7 @@ fn main() {
             .binding_flags(&[
                 vk::DescriptorBindingFlagsEXT::empty(),
                 vk::DescriptorBindingFlagsEXT::empty(),
-                vk::DescriptorBindingFlagsEXT::VARIABLE_DESCRIPTOR_COUNT,
+                vk::DescriptorBindingFlagsEXT::empty(),
             ])
             .build();
 
@@ -923,7 +923,7 @@ fn main() {
                             .binding(1)
                             .build(),
                         vk::DescriptorSetLayoutBinding::builder()
-                            .descriptor_count(3)
+                            .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                             .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_NV)
                             .binding(2)
