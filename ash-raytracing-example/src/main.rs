@@ -3,15 +3,10 @@ use std::{
     ffi::{c_void, CStr, CString},
     fs::File,
     io::Write,
-    path::Path,
     ptr::{self, null},
 };
 
-use ash::{
-    prelude::VkResult,
-    util::{read_spv, Align},
-    vk,
-};
+use ash::{prelude::VkResult, util::Align, vk};
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
