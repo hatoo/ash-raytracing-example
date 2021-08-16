@@ -360,7 +360,7 @@ fn main() {
 
     // acceleration structures
 
-    let (vertex_count, vertex_stride, vertex_buffer, vertex_memory) = {
+    let (vertex_count, vertex_stride, vertex_buffer) = {
         let vertices = [
             Vertex {
                 pos: [-0.5, -0.5, 0.0],
@@ -378,110 +378,35 @@ fn main() {
 
         let vertex_buffer_size = vertex_stride * vertex_count;
 
-        let buffer_create_info = vk::BufferCreateInfo::builder()
-            .size(vertex_buffer_size as u64)
-            .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .build();
-
-        let buffer = unsafe { device.create_buffer(&buffer_create_info, None) }.unwrap();
-
-        let memory_req = unsafe { device.get_buffer_memory_requirements(buffer) };
-
-        let memory_index = get_memory_type_index(
-            device_memory_properties,
-            memory_req.memory_type_bits,
+        let mut vertex_buffer = BufferResource::new(
+            vertex_buffer_size as vk::DeviceSize,
+            vk::BufferUsageFlags::VERTEX_BUFFER,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            &device,
+            device_memory_properties,
         );
 
-        let allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: memory_req.size,
-            memory_type_index: memory_index,
-            ..Default::default()
-        };
+        vertex_buffer.store(&vertices, &device);
 
-        let memory = unsafe { device.allocate_memory(&allocate_info, None).unwrap() };
-
-        unsafe { device.bind_buffer_memory(buffer, memory, 0) }.unwrap();
-
-        let mapped_ptr = unsafe {
-            device.map_memory(
-                memory,
-                0,
-                vertex_buffer_size as u64,
-                vk::MemoryMapFlags::empty(),
-            )
-        }
-        .unwrap();
-
-        let mut mapped_slice = unsafe {
-            Align::new(
-                mapped_ptr,
-                std::mem::align_of::<Vertex>() as u64,
-                vertex_buffer_size as u64,
-            )
-        };
-        mapped_slice.copy_from_slice(&vertices);
-        unsafe {
-            device.unmap_memory(memory);
-        }
-        (vertex_count, vertex_stride, buffer, memory)
+        (vertex_count, vertex_stride, vertex_buffer)
     };
 
-    let (index_count, index_buffer, index_memory) = {
-        let indices = [0u16, 1, 2];
+    let (index_count, index_buffer) = {
+        let indices: [u32; 3] = [0, 1, 2];
 
         let index_count = indices.len();
-        let index_buffer_size = std::mem::size_of::<u16>() * index_count;
+        let index_buffer_size = std::mem::size_of::<usize>() * index_count;
 
-        let buffer_create_info = vk::BufferCreateInfo::builder()
-            .size(index_buffer_size as u64)
-            .usage(vk::BufferUsageFlags::INDEX_BUFFER)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .build();
-
-        let buffer = unsafe { device.create_buffer(&buffer_create_info, None) }.unwrap();
-
-        let memory_req = unsafe { device.get_buffer_memory_requirements(buffer) };
-
-        let memory_index = get_memory_type_index(
-            device_memory_properties,
-            memory_req.memory_type_bits,
+        let mut index_buffer = BufferResource::new(
+            index_buffer_size as vk::DeviceSize,
+            vk::BufferUsageFlags::INDEX_BUFFER,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            &device,
+            device_memory_properties,
         );
 
-        let allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: memory_req.size,
-            memory_type_index: memory_index,
-            ..Default::default()
-        };
-
-        let memory = unsafe { device.allocate_memory(&allocate_info, None).unwrap() };
-
-        unsafe { device.bind_buffer_memory(buffer, memory, 0) }.unwrap();
-
-        let mapped_ptr = unsafe {
-            device.map_memory(
-                memory,
-                0,
-                index_buffer_size as u64,
-                vk::MemoryMapFlags::empty(),
-            )
-        }
-        .unwrap();
-
-        let mut mapped_slice = unsafe {
-            Align::new(
-                mapped_ptr,
-                std::mem::align_of::<u16>() as u64,
-                index_buffer_size as u64,
-            )
-        };
-        mapped_slice.copy_from_slice(&indices);
-        unsafe {
-            device.unmap_memory(memory);
-        }
-        (index_count, buffer, memory)
+        index_buffer.store(&indices, &device);
+        (index_count, index_buffer)
     };
 
     let geometry = vec![vk::GeometryNV::builder()
@@ -490,15 +415,15 @@ fn main() {
             vk::GeometryDataNV::builder()
                 .triangles(
                     vk::GeometryTrianglesNV::builder()
-                        .vertex_data(vertex_buffer)
+                        .vertex_data(vertex_buffer.buffer)
                         .vertex_offset(0)
                         .vertex_count(vertex_count as u32)
                         .vertex_stride(vertex_stride as u64)
                         .vertex_format(vk::Format::R32G32B32_SFLOAT)
-                        .index_data(index_buffer)
+                        .index_data(index_buffer.buffer)
                         .index_offset(0)
                         .index_count(index_count as u32)
-                        .index_type(vk::IndexType::UINT16)
+                        .index_type(vk::IndexType::UINT32)
                         .build(),
                 )
                 .build(),
@@ -1630,6 +1555,10 @@ fn main() {
     }
 
     unsafe {
+        vertex_buffer.destroy(&device);
+    }
+
+    unsafe {
         device.destroy_device(None);
     }
 
@@ -1819,6 +1748,11 @@ impl BufferResource {
         unsafe {
             device.unmap_memory(self.memory);
         }
+    }
+
+    unsafe fn destroy(self, device: &ash::Device) {
+        device.destroy_buffer(self.buffer, None);
+        device.free_memory(self.memory, None);
     }
 }
 
