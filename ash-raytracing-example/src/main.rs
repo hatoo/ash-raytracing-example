@@ -73,8 +73,6 @@ fn main() {
     const HEIGHT: u32 = 600;
     const COLOR_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
 
-    let extent = vk::Extent2D::builder().width(WIDTH).height(HEIGHT).build();
-
     let validation_layers: Vec<CString> = if ENABLE_VALIDATION_LAYER {
         vec![CString::new("VK_LAYER_KHRONOS_validation").unwrap()]
     } else {
@@ -915,83 +913,54 @@ fn main() {
             .expect("Failed to begin recording Command Buffer at beginning!");
     }
 
-    let (shader_binding_table_buffer, shader_binding_table_memory) = {
+    let shader_binding_table_buffer = {
         let group_count = 3; // Listed in vk::RayTracingPipelineCreateInfoNV
                              // let table_size = (rt_properties.shader_group_handle_size * group_count) as u64;
+
+        let mut incoming_table_data: Vec<u8> =
+            vec![0u8; group_count * rt_properties.shader_group_handle_size as usize];
+
+        unsafe {
+            ray_tracing
+                .get_ray_tracing_shader_group_handles(
+                    graphics_pipeline,
+                    0,
+                    group_count as u32,
+                    &mut incoming_table_data,
+                )
+                .unwrap();
+        }
+
         let handle_size_aligned = aligned_size(
             rt_properties.shader_group_handle_size,
             rt_properties.shader_group_base_alignment,
         );
-        let table_size = (aligned_size(
-            rt_properties.shader_group_handle_size,
-            rt_properties.shader_group_base_alignment,
-        ) * group_count) as u64;
-        let mut table_data: Vec<u8> = vec![0u8; table_size as usize];
-        unsafe {
-            ray_tracing
-                .get_ray_tracing_shader_group_handles(graphics_pipeline, 0, 1, &mut table_data)
-                .unwrap();
 
-            ray_tracing
-                .get_ray_tracing_shader_group_handles(
-                    graphics_pipeline,
-                    1,
-                    1,
-                    &mut table_data[handle_size_aligned as usize..],
-                )
-                .unwrap();
+        let table_size = group_count * handle_size_aligned as usize;
+        let mut table_data = vec![0u8; table_size];
 
-            ray_tracing
-                .get_ray_tracing_shader_group_handles(
-                    graphics_pipeline,
-                    2,
-                    1,
-                    &mut table_data[2 * handle_size_aligned as usize..],
-                )
-                .unwrap();
+        for i in 0..group_count {
+            table_data[i * handle_size_aligned as usize
+                ..i * handle_size_aligned as usize
+                    + rt_properties.shader_group_handle_size as usize]
+                .copy_from_slice(
+                    &incoming_table_data[i * rt_properties.shader_group_handle_size as usize
+                        ..i * rt_properties.shader_group_handle_size as usize
+                            + rt_properties.shader_group_handle_size as usize],
+                );
         }
-        let buffer_create_info = vk::BufferCreateInfo::builder()
-            .size(table_size as u64)
-            .usage(vk::BufferUsageFlags::TRANSFER_SRC)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .build();
 
-        let buffer = unsafe { device.create_buffer(&buffer_create_info, None) }.unwrap();
-
-        let memory_req = unsafe { device.get_buffer_memory_requirements(buffer) };
-
-        let memory_index = get_memory_type_index(
-            device_memory_properties,
-            memory_req.memory_type_bits,
+        let mut shader_binding_table_buffer = BufferResource::new(
+            table_size as u64,
+            vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE,
+            &device,
+            device_memory_properties,
         );
 
-        let allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: memory_req.size,
-            memory_type_index: memory_index,
-            ..Default::default()
-        };
+        shader_binding_table_buffer.store(&table_data, &device);
 
-        let memory = unsafe { device.allocate_memory(&allocate_info, None).unwrap() };
-
-        unsafe { device.bind_buffer_memory(buffer, memory, 0) }.unwrap();
-
-        let mapped_ptr =
-            unsafe { device.map_memory(memory, 0, table_size as u64, vk::MemoryMapFlags::empty()) }
-                .unwrap();
-
-        let mut mapped_slice = unsafe {
-            Align::new(
-                mapped_ptr,
-                std::mem::align_of::<u8>() as u64,
-                table_size as u64,
-            )
-        };
-        mapped_slice.copy_from_slice(&table_data);
-        unsafe {
-            device.unmap_memory(memory);
-        }
-        (buffer, memory)
+        shader_binding_table_buffer
     };
 
     let color_buffer = {
@@ -1165,14 +1134,14 @@ fn main() {
         // |                 |               |               |
         // | 0               | 1             | 2             | 3
 
-        let sbt_raygen_buffer = shader_binding_table_buffer;
+        let sbt_raygen_buffer = shader_binding_table_buffer.buffer;
         let sbt_raygen_offset = 0;
 
-        let sbt_miss_buffer = shader_binding_table_buffer;
+        let sbt_miss_buffer = shader_binding_table_buffer.buffer;
         let sbt_miss_offset = 2 * handle_size_aligned;
         let sbt_miss_stride = handle_size_aligned;
 
-        let sbt_hit_buffer = shader_binding_table_buffer;
+        let sbt_hit_buffer = shader_binding_table_buffer.buffer;
         let sbt_hit_offset = 1 * handle_size_aligned;
         let sbt_hit_stride = handle_size_aligned;
 
