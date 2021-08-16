@@ -433,54 +433,58 @@ fn main() {
 
     // Create bottom-level acceleration structure
 
-    let bottom_as = {
-        let accel_info = vk::AccelerationStructureCreateInfoNV::builder()
-            .compacted_size(0)
-            .info(
-                vk::AccelerationStructureInfoNV::builder()
-                    .ty(vk::AccelerationStructureTypeNV::BOTTOM_LEVEL)
-                    .geometries(&geometry)
-                    // .flags(vk::BuildAccelerationStructureFlagsNV::PREFER_FAST_TRACE)
+    let (bottom_as, bottom_as_memory) = {
+        let bottom_as = {
+            let accel_info = vk::AccelerationStructureCreateInfoNV::builder()
+                .compacted_size(0)
+                .info(
+                    vk::AccelerationStructureInfoNV::builder()
+                        .ty(vk::AccelerationStructureTypeNV::BOTTOM_LEVEL)
+                        .geometries(&geometry)
+                        // .flags(vk::BuildAccelerationStructureFlagsNV::PREFER_FAST_TRACE)
+                        .build(),
+                )
+                .build();
+
+            unsafe { ray_tracing.create_acceleration_structure(&accel_info, None) }.unwrap()
+        };
+
+        let memory_requirements = unsafe {
+            ray_tracing.get_acceleration_structure_memory_requirements(
+                &vk::AccelerationStructureMemoryRequirementsInfoNV::builder()
+                    .acceleration_structure(bottom_as)
+                    .ty(vk::AccelerationStructureMemoryRequirementsTypeNV::OBJECT)
                     .build(),
             )
-            .build();
+        };
 
-        unsafe { ray_tracing.create_acceleration_structure(&accel_info, None) }.unwrap()
+        let bottom_as_memory = unsafe {
+            device.allocate_memory(
+                &vk::MemoryAllocateInfo::builder()
+                    .allocation_size(memory_requirements.memory_requirements.size)
+                    .memory_type_index(get_memory_type_index(
+                        device_memory_properties,
+                        memory_requirements.memory_requirements.memory_type_bits,
+                        vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                    ))
+                    .build(),
+                None,
+            )
+        }
+        .unwrap();
+
+        unsafe {
+            ray_tracing.bind_acceleration_structure_memory(&[
+                vk::BindAccelerationStructureMemoryInfoNV::builder()
+                    .acceleration_structure(bottom_as)
+                    .memory(bottom_as_memory)
+                    .build(),
+            ])
+        }
+        .unwrap();
+
+        (bottom_as, bottom_as_memory)
     };
-
-    let memory_requirements = unsafe {
-        ray_tracing.get_acceleration_structure_memory_requirements(
-            &vk::AccelerationStructureMemoryRequirementsInfoNV::builder()
-                .acceleration_structure(bottom_as)
-                .ty(vk::AccelerationStructureMemoryRequirementsTypeNV::OBJECT)
-                .build(),
-        )
-    };
-
-    let bottom_as_memory = unsafe {
-        device.allocate_memory(
-            &vk::MemoryAllocateInfo::builder()
-                .allocation_size(memory_requirements.memory_requirements.size)
-                .memory_type_index(get_memory_type_index(
-                    device_memory_properties,
-                    memory_requirements.memory_requirements.memory_type_bits,
-                    vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                ))
-                .build(),
-            None,
-        )
-    }
-    .unwrap();
-
-    unsafe {
-        ray_tracing.bind_acceleration_structure_memory(&[
-            vk::BindAccelerationStructureMemoryInfoNV::builder()
-                .acceleration_structure(bottom_as)
-                .memory(bottom_as_memory)
-                .build(),
-        ])
-    }
-    .unwrap();
 
     let accel_handle = unsafe { ray_tracing.get_acceleration_structure_handle(bottom_as) }.unwrap();
 
@@ -533,53 +537,57 @@ fn main() {
         (instances.len(), instance_buffer)
     };
 
-    let top_as = {
-        let accel_info = vk::AccelerationStructureCreateInfoNV::builder()
-            .compacted_size(0)
-            .info(
-                vk::AccelerationStructureInfoNV::builder()
-                    .ty(vk::AccelerationStructureTypeNV::TOP_LEVEL)
-                    .instance_count(instance_count as u32)
+    let (top_as, top_as_memory) = {
+        let top_as = {
+            let accel_info = vk::AccelerationStructureCreateInfoNV::builder()
+                .compacted_size(0)
+                .info(
+                    vk::AccelerationStructureInfoNV::builder()
+                        .ty(vk::AccelerationStructureTypeNV::TOP_LEVEL)
+                        .instance_count(instance_count as u32)
+                        .build(),
+                )
+                .build();
+
+            unsafe { ray_tracing.create_acceleration_structure(&accel_info, None) }.unwrap()
+        };
+
+        let memory_requirements = unsafe {
+            ray_tracing.get_acceleration_structure_memory_requirements(
+                &vk::AccelerationStructureMemoryRequirementsInfoNV::builder()
+                    .acceleration_structure(top_as)
+                    .ty(vk::AccelerationStructureMemoryRequirementsTypeNV::OBJECT)
                     .build(),
             )
-            .build();
+        };
 
-        unsafe { ray_tracing.create_acceleration_structure(&accel_info, None) }.unwrap()
+        let top_as_memory = unsafe {
+            device.allocate_memory(
+                &vk::MemoryAllocateInfo::builder()
+                    .allocation_size(memory_requirements.memory_requirements.size)
+                    .memory_type_index(get_memory_type_index(
+                        device_memory_properties,
+                        memory_requirements.memory_requirements.memory_type_bits,
+                        vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                    ))
+                    .build(),
+                None,
+            )
+        }
+        .unwrap();
+
+        unsafe {
+            ray_tracing.bind_acceleration_structure_memory(&[
+                vk::BindAccelerationStructureMemoryInfoNV::builder()
+                    .acceleration_structure(top_as)
+                    .memory(top_as_memory)
+                    .build(),
+            ])
+        }
+        .unwrap();
+
+        (top_as, top_as_memory)
     };
-
-    let memory_requirements = unsafe {
-        ray_tracing.get_acceleration_structure_memory_requirements(
-            &vk::AccelerationStructureMemoryRequirementsInfoNV::builder()
-                .acceleration_structure(top_as)
-                .ty(vk::AccelerationStructureMemoryRequirementsTypeNV::OBJECT)
-                .build(),
-        )
-    };
-
-    let top_as_memory = unsafe {
-        device.allocate_memory(
-            &vk::MemoryAllocateInfo::builder()
-                .allocation_size(memory_requirements.memory_requirements.size)
-                .memory_type_index(get_memory_type_index(
-                    device_memory_properties,
-                    memory_requirements.memory_requirements.memory_type_bits,
-                    vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                ))
-                .build(),
-            None,
-        )
-    }
-    .unwrap();
-
-    unsafe {
-        ray_tracing.bind_acceleration_structure_memory(&[
-            vk::BindAccelerationStructureMemoryInfoNV::builder()
-                .acceleration_structure(top_as)
-                .memory(top_as_memory)
-                .build(),
-        ])
-    }
-    .unwrap();
 
     // Build acceleration structures
 
@@ -1512,6 +1520,12 @@ fn main() {
     }
 
     unsafe {
+        ray_tracing.destroy_acceleration_structure(bottom_as, None);
+        device.free_memory(bottom_as_memory, None);
+
+        ray_tracing.destroy_acceleration_structure(top_as, None);
+        device.free_memory(top_as_memory, None);
+
         device.destroy_image_view(image_view, None);
         device.destroy_image(image, None);
         device.free_memory(device_memory, None);
