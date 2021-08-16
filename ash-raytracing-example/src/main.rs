@@ -1193,7 +1193,9 @@ fn main() {
                 device.wait_for_fences(&[fence], true, u64::MAX).unwrap();
                 device.free_command_buffers(command_pool, &[command_buffer]);
             }
+            eprint!("\rSamples: {} / {} ", sampled, N_SAMPLES);
         }
+        eprint!("\nDone");
     }
 
     // transfer to host
