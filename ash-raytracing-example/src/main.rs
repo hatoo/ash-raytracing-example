@@ -1028,19 +1028,6 @@ fn main() {
                 .expect("Failed to begin recording Command Buffer at beginning!");
         }
         unsafe {
-            device.cmd_bind_pipeline(
-                command_buffer,
-                vk::PipelineBindPoint::RAY_TRACING_KHR,
-                graphics_pipeline,
-            );
-            device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::RAY_TRACING_KHR,
-                pipeline_layout,
-                0,
-                &[descriptor_set],
-                &[],
-            );
             let range = vk::ImageSubresourceRange::builder()
                 .aspect_mask(vk::ImageAspectFlags::COLOR)
                 .base_mip_level(0)
