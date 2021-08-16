@@ -3,6 +3,7 @@ use std::{
     ffi::{c_void, CStr, CString},
     fs::File,
     io::Write,
+    os::raw::c_char,
     ptr::{self, null},
 };
 
@@ -136,10 +137,16 @@ fn main() {
             .expect("failed to create instance!")
     };
 
-    let (physical_device, queue_family_index) =
-        pick_physical_device_and_queue_family_indices(&instance)
-            .unwrap()
-            .unwrap();
+    let (physical_device, queue_family_index) = pick_physical_device_and_queue_family_indices(
+        &instance,
+        &[
+            ash::extensions::khr::AccelerationStructure::name(),
+            ash::extensions::khr::DeferredHostOperations::name(),
+            ash::extensions::khr::RayTracingPipeline::name(),
+        ],
+    )
+    .unwrap()
+    .unwrap();
 
     let device: ash::Device = {
         let queue_create_info = vk::DeviceQueueCreateInfo::builder()
@@ -1652,10 +1659,25 @@ fn check_validation_layer_support<'a>(
 
 fn pick_physical_device_and_queue_family_indices(
     instance: &ash::Instance,
+    extensions: &[&CStr],
 ) -> VkResult<Option<(vk::PhysicalDevice, u32)>> {
     Ok(unsafe { instance.enumerate_physical_devices() }?
         .into_iter()
         .find_map(|physical_device| {
+            if unsafe { instance.enumerate_device_extension_properties(physical_device) }.map(
+                |exts| {
+                    let set: HashSet<&CStr> = exts
+                        .iter()
+                        .map(|ext| unsafe { CStr::from_ptr(&ext.extension_name as *const c_char) })
+                        .collect();
+
+                    extensions.iter().all(|ext| set.contains(ext))
+                },
+            ) != Ok(true)
+            {
+                return None;
+            }
+
             let graphics_family =
                 unsafe { instance.get_physical_device_queue_family_properties(physical_device) }
                     .into_iter()
