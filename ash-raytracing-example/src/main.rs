@@ -23,7 +23,10 @@ fn main() {
     const ENABLE_VALIDATION_LAYER: bool = cfg!(debug_assertions);
     const WIDTH: u32 = 800;
     const HEIGHT: u32 = 600;
-    const COLOR_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
+    const COLOR_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
+
+    const N_SAMPLES: u32 = 1000;
+    const N_SAMPLES_ITER: u32 = 100;
 
     let validation_layers: Vec<CString> = if ENABLE_VALIDATION_LAYER {
         vec![CString::new("VK_LAYER_KHRONOS_validation").unwrap()]
@@ -193,6 +196,7 @@ fn main() {
             .tiling(vk::ImageTiling::OPTIMAL)
             .usage(
                 vk::ImageUsageFlags::COLOR_ATTACHMENT
+                    | vk::ImageUsageFlags::TRANSFER_DST
                     | vk::ImageUsageFlags::STORAGE
                     | vk::ImageUsageFlags::TRANSFER_SRC,
             )
@@ -698,39 +702,6 @@ fn main() {
         (top_as, top_as_buffer)
     };
 
-    // render pass
-    let render_pass = {
-        let color_attachment = vk::AttachmentDescription {
-            flags: vk::AttachmentDescriptionFlags::empty(),
-            format: COLOR_FORMAT,
-            samples: vk::SampleCountFlags::TYPE_1,
-            load_op: vk::AttachmentLoadOp::CLEAR,
-            store_op: vk::AttachmentStoreOp::STORE,
-            stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
-            stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
-            initial_layout: vk::ImageLayout::UNDEFINED,
-            final_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-        };
-
-        let color_attachment_ref = vk::AttachmentReference {
-            attachment: 0,
-            layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-        };
-
-        let subpass = vk::SubpassDescription::builder()
-            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-            .color_attachments(&[color_attachment_ref])
-            .build();
-
-        let renderpass_create_info = vk::RenderPassCreateInfo::builder()
-            .attachments(&[color_attachment])
-            .subpasses(&[subpass])
-            .build();
-
-        unsafe { device.create_render_pass(&renderpass_create_info, None) }
-            .expect("Failed to create render pass!")
-    };
-
     let (descriptor_set_layout, graphics_pipeline, pipeline_layout) = {
         let mut binding_flags = vk::DescriptorSetLayoutBindingFlagsCreateInfoEXT::builder()
             .binding_flags(&[
@@ -846,39 +817,6 @@ fn main() {
 
         (descriptor_set_layout, pipeline, pipeline_layout)
     };
-
-    let framebuffer = {
-        let framebuffer_create_info = vk::FramebufferCreateInfo::builder()
-            .render_pass(render_pass)
-            .attachments(&[image_view])
-            .width(WIDTH)
-            .height(HEIGHT)
-            .layers(1)
-            .build();
-
-        unsafe { device.create_framebuffer(&framebuffer_create_info, None) }
-            .expect("Failed to create Framebuffer!")
-    };
-
-    let command_buffer = {
-        let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
-            .command_buffer_count(1)
-            .command_pool(command_pool)
-            .level(vk::CommandBufferLevel::PRIMARY)
-            .build();
-
-        unsafe { device.allocate_command_buffers(&command_buffer_allocate_info) }
-            .expect("Failed to allocate Command Buffers!")[0]
-    };
-
-    {
-        let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
-            .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)
-            .build();
-
-        unsafe { device.begin_command_buffer(command_buffer, &command_buffer_begin_info) }
-            .expect("Failed to begin recording Command Buffer at beginning!");
-    }
 
     let shader_binding_table_buffer = {
         let group_count = 3;
@@ -1028,6 +966,15 @@ fn main() {
         device.update_descriptor_sets(&[accel_write, image_write, buffers_write], &[]);
     }
 
+    let fence = {
+        let fence_create_info = vk::FenceCreateInfo::builder()
+            .flags(vk::FenceCreateFlags::SIGNALED)
+            .build();
+
+        unsafe { device.create_fence(&fence_create_info, None) }
+            .expect("Failed to create Fence Object!")
+    };
+
     {
         let handle_size_aligned = aligned_size(
             rt_pipeline_properties.shader_group_handle_size,
@@ -1061,6 +1008,25 @@ fn main() {
 
         let sbt_call_region = vk::StridedDeviceAddressRegionKHR::default();
 
+        let command_buffer = {
+            let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+                .command_buffer_count(1)
+                .command_pool(command_pool)
+                .level(vk::CommandBufferLevel::PRIMARY)
+                .build();
+
+            unsafe { device.allocate_command_buffers(&command_buffer_allocate_info) }
+                .expect("Failed to allocate Command Buffers!")[0]
+        };
+
+        {
+            let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
+                .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)
+                .build();
+
+            unsafe { device.begin_command_buffer(command_buffer, &command_buffer_begin_info) }
+                .expect("Failed to begin recording Command Buffer at beginning!");
+        }
         unsafe {
             device.cmd_bind_pipeline(
                 command_buffer,
@@ -1075,30 +1041,94 @@ fn main() {
                 &[descriptor_set],
                 &[],
             );
-            rt_pipeline.cmd_trace_rays(
+            let range = vk::ImageSubresourceRange::builder()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_mip_level(0)
+                .level_count(1)
+                .base_array_layer(0)
+                .layer_count(1)
+                .build();
+
+            device.cmd_clear_color_image(
                 command_buffer,
-                &sbt_raygen_region,
-                &sbt_miss_region,
-                &sbt_hit_region,
-                &sbt_call_region,
-                WIDTH,
-                HEIGHT,
-                1,
+                image,
+                vk::ImageLayout::GENERAL,
+                &vk::ClearColorValue {
+                    float32: [0.0, 0.0, 0.0, 0.0],
+                },
+                &[range],
             );
+
+            let image_barrier = vk::ImageMemoryBarrier::builder()
+                .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+                .dst_access_mask(vk::AccessFlags::SHADER_WRITE | vk::AccessFlags::SHADER_READ)
+                .old_layout(vk::ImageLayout::GENERAL)
+                .new_layout(vk::ImageLayout::GENERAL)
+                .image(image)
+                .subresource_range(
+                    vk::ImageSubresourceRange::builder()
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .base_mip_level(0)
+                        .level_count(1)
+                        .base_array_layer(0)
+                        .layer_count(1)
+                        .build(),
+                )
+                .build();
+
+            device.cmd_pipeline_barrier(
+                command_buffer,
+                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[image_barrier],
+            );
+
+            let image_barrier2 = vk::ImageMemoryBarrier::builder()
+                .src_access_mask(vk::AccessFlags::SHADER_WRITE | vk::AccessFlags::SHADER_READ)
+                .dst_access_mask(vk::AccessFlags::SHADER_WRITE | vk::AccessFlags::SHADER_READ)
+                .old_layout(vk::ImageLayout::GENERAL)
+                .new_layout(vk::ImageLayout::GENERAL)
+                .image(image)
+                .subresource_range(
+                    vk::ImageSubresourceRange::builder()
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .base_mip_level(0)
+                        .level_count(1)
+                        .base_array_layer(0)
+                        .layer_count(1)
+                        .build(),
+                )
+                .build();
+
+            for _ in 0..N_SAMPLES {
+                rt_pipeline.cmd_trace_rays(
+                    command_buffer,
+                    &sbt_raygen_region,
+                    &sbt_miss_region,
+                    &sbt_hit_region,
+                    &sbt_call_region,
+                    WIDTH,
+                    HEIGHT,
+                    1,
+                );
+
+                device.cmd_pipeline_barrier(
+                    command_buffer,
+                    vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+                    vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &[image_barrier2],
+                );
+            }
+
             device.end_command_buffer(command_buffer).unwrap();
         }
-    }
 
-    let fence = {
-        let fence_create_info = vk::FenceCreateInfo::builder()
-            .flags(vk::FenceCreateFlags::SIGNALED)
-            .build();
-
-        unsafe { device.create_fence(&fence_create_info, None) }
-            .expect("Failed to create Fence Object!")
-    };
-
-    {
         let submit_infos = [vk::SubmitInfo::builder()
             .command_buffers(&[command_buffer])
             .build()];
@@ -1326,9 +1356,16 @@ fn main() {
         .unwrap()
         .into_stream_writer_with_size((4 * WIDTH) as usize);
 
+    let scale = 1.0 / N_SAMPLES as f32;
     for _ in 0..HEIGHT {
-        let row = unsafe { std::slice::from_raw_parts(data, 4 * WIDTH as usize) };
-        png_writer.write_all(row).unwrap();
+        let row = unsafe { std::slice::from_raw_parts(data, 4 * 4 * WIDTH as usize) };
+        let row_f32: &[f32] = bytemuck::cast_slice(row);
+        let row_rgba8: Vec<u8> = row_f32
+            .iter()
+            .map(|f| (256.0 * (f * scale).sqrt().clamp(0.0, 0.999)) as u8)
+            .collect();
+
+        png_writer.write_all(&row_rgba8).unwrap();
         data = unsafe { data.offset(subresource_layout.row_pitch as isize) };
     }
 
@@ -1350,8 +1387,6 @@ fn main() {
         device.destroy_command_pool(command_pool, None);
     }
 
-    unsafe { device.destroy_framebuffer(framebuffer, None) };
-
     unsafe {
         // device.destroy_descriptor_set_layout(layout, allocation_callbacks)
         device.destroy_descriptor_pool(descriptor_pool, None);
@@ -1362,10 +1397,6 @@ fn main() {
 
     unsafe {
         device.destroy_pipeline_layout(pipeline_layout, None);
-    }
-
-    unsafe {
-        device.destroy_render_pass(render_pass, None);
     }
 
     unsafe {
