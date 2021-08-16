@@ -428,13 +428,17 @@ fn main() {
         .geometry(vk::AccelerationStructureGeometryDataKHR {
             triangles: vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
                 .vertex_data(vk::DeviceOrHostAddressConstKHR {
-                    device_address: get_buffer_device_address(&device, vertex_buffer.buffer),
+                    device_address: unsafe {
+                        get_buffer_device_address(&device, vertex_buffer.buffer)
+                    },
                 })
                 .max_vertex(vertex_count as u32 - 1)
                 .vertex_stride(vertex_stride as u64)
                 .vertex_format(vk::Format::R32G32B32_SFLOAT)
                 .index_data(vk::DeviceOrHostAddressConstKHR {
-                    device_address: get_buffer_device_address(&device, index_buffer.buffer),
+                    device_address: unsafe {
+                        get_buffer_device_address(&device, index_buffer.buffer)
+                    },
                 })
                 .index_type(vk::IndexType::UINT32)
                 .build(),
@@ -1753,10 +1757,10 @@ fn aligned_size(value: u32, alignment: u32) -> u32 {
     (value + alignment - 1) & !(alignment - 1)
 }
 
-fn get_buffer_device_address(device: &ash::Device, buffer: vk::Buffer) -> u64 {
+unsafe fn get_buffer_device_address(device: &ash::Device, buffer: vk::Buffer) -> u64 {
     let buffer_device_address_info = vk::BufferDeviceAddressInfo::builder()
         .buffer(buffer)
         .build();
 
-    unsafe { device.get_buffer_device_address(&buffer_device_address_info) }
+    device.get_buffer_device_address(&buffer_device_address_info)
 }
