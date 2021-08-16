@@ -915,7 +915,6 @@ fn main() {
 
     let shader_binding_table_buffer = {
         let group_count = 3; // Listed in vk::RayTracingPipelineCreateInfoNV
-                             // let table_size = (rt_properties.shader_group_handle_size * group_count) as u64;
 
         let mut incoming_table_data: Vec<u8> =
             vec![0u8; group_count * rt_properties.shader_group_handle_size as usize];
@@ -964,12 +963,6 @@ fn main() {
     };
 
     let color_buffer = {
-        /*
-        let color0: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
-        let color1: [f32; 4] = [0.0, 1.0, 0.0, 1.0];
-        let color2: [f32; 4] = [0.0, 0.0, 1.0, 1.0];
-        */
-
         let color: [f32; 12] = [1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0];
 
         let buffer_size = (std::mem::size_of::<f32>() * 12) as vk::DeviceSize;
@@ -982,34 +975,6 @@ fn main() {
             device_memory_properties,
         );
         color_buffer.store(&color, &device);
-        /*
-        let mut color0_buffer = BufferResource::new(
-            buffer_size,
-            vk::BufferUsageFlags::UNIFORM_BUFFER,
-            vk::MemoryPropertyFlags::HOST_VISIBLE,
-            &device,
-            device_memory_properties,
-        );
-        color0_buffer.store(&color0, &device);
-
-        let mut color1_buffer = BufferResource::new(
-            buffer_size,
-            vk::BufferUsageFlags::UNIFORM_BUFFER,
-            vk::MemoryPropertyFlags::HOST_VISIBLE,
-            &device,
-            device_memory_properties,
-        );
-        color1_buffer.store(&color1, &device);
-
-        let mut color2_buffer = BufferResource::new(
-            buffer_size,
-            vk::BufferUsageFlags::UNIFORM_BUFFER,
-            vk::MemoryPropertyFlags::HOST_VISIBLE,
-            &device,
-            device_memory_properties,
-        );
-        color2_buffer.store(&color2, &device);
-        */
 
         color_buffer
     };
@@ -1082,33 +1047,10 @@ fn main() {
         .image_info(&image_info)
         .build();
 
-    let buffer = color_buffer.buffer;
-    /*
-    let buffer0 = color0_buffer.buffer;
-    let buffer1 = color1_buffer.buffer;
-    let buffer2 = color2_buffer.buffer;
-    */
-
-    let buffer_info = [
-        vk::DescriptorBufferInfo::builder()
-            .buffer(buffer)
-            .range(vk::WHOLE_SIZE)
-            .build(),
-        /*
-        vk::DescriptorBufferInfo::builder()
-            .buffer(buffer0)
-            .range(vk::WHOLE_SIZE)
-            .build(),
-        vk::DescriptorBufferInfo::builder()
-            .buffer(buffer1)
-            .range(vk::WHOLE_SIZE)
-            .build(),
-        vk::DescriptorBufferInfo::builder()
-            .buffer(buffer2)
-            .range(vk::WHOLE_SIZE)
-            .build(),
-            */
-    ];
+    let buffer_info = [vk::DescriptorBufferInfo::builder()
+        .buffer(color_buffer.buffer)
+        .range(vk::WHOLE_SIZE)
+        .build()];
 
     let buffers_write = vk::WriteDescriptorSet::builder()
         .dst_set(descriptor_set)
@@ -1123,8 +1065,6 @@ fn main() {
     }
 
     {
-        let handle_size = rt_properties.shader_group_handle_size as u64;
-
         let handle_size_aligned = aligned_size(
             rt_properties.shader_group_handle_size,
             rt_properties.shader_group_base_alignment,
@@ -1453,7 +1393,11 @@ fn main() {
     unsafe { device.destroy_framebuffer(framebuffer, None) };
 
     unsafe {
+        // device.destroy_descriptor_set_layout(layout, allocation_callbacks)
+        device.destroy_descriptor_pool(descriptor_pool, None);
+        shader_binding_table_buffer.destroy(&device);
         device.destroy_pipeline(graphics_pipeline, None);
+        device.destroy_descriptor_set_layout(descriptor_set_layout, None);
     }
 
     unsafe {
@@ -1477,6 +1421,7 @@ fn main() {
     }
 
     unsafe {
+        color_buffer.destroy(&device);
         instance_buffer.destroy(&device);
         vertex_buffer.destroy(&device);
         index_buffer.destroy(&device);
