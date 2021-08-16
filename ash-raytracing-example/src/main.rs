@@ -741,12 +741,21 @@ fn main() {
         }
         .unwrap();
 
+        let push_constant_range = vk::PushConstantRange::builder()
+            .offset(0)
+            .size(4)
+            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+            .build();
+
         const SHADER: &[u8] = include_bytes!(env!("ash_raytracing_example_shader.spv"));
 
         let shader_module = unsafe { create_shader_module(&device, SHADER).unwrap() };
 
         let layouts = vec![descriptor_set_layout];
-        let layout_create_info = vk::PipelineLayoutCreateInfo::builder().set_layouts(&layouts);
+        let layout_create_info = vk::PipelineLayoutCreateInfo::builder()
+            .set_layouts(&layouts)
+            .push_constant_ranges(&[push_constant_range])
+            .build();
 
         let pipeline_layout =
             unsafe { device.create_pipeline_layout(&layout_create_info, None) }.unwrap();
@@ -1161,6 +1170,14 @@ fn main() {
                         &[],
                         &[],
                         &[image_barrier2],
+                    );
+
+                    device.cmd_push_constants(
+                        command_buffer,
+                        pipeline_layout,
+                        vk::ShaderStageFlags::RAYGEN_KHR,
+                        0,
+                        &0.1f32.to_le_bytes(),
                     );
 
                     rt_pipeline.cmd_trace_rays(

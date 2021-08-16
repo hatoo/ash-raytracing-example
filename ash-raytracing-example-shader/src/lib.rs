@@ -14,6 +14,10 @@ use spirv_std::{
     ray_tracing::{AccelerationStructure, RayFlags},
 };
 
+pub struct PushConstants {
+    x: f32,
+}
+
 #[spirv(fragment)]
 pub fn main_fs(output: &mut Vec4, color: Vec3) {
     *output = color.extend(1.0);
@@ -57,6 +61,7 @@ pub fn main_closest_hit(
 pub fn main_ray_generation(
     #[spirv(launch_id)] launch_id: UVec3,
     #[spirv(launch_size)] launch_size: UVec3,
+    #[spirv(push_constant)] constants: &PushConstants,
     #[spirv(descriptor_set = 0, binding = 0)] top_level_as: &AccelerationStructure,
     #[spirv(descriptor_set = 0, binding = 1)] image: &Image!(2D, format=rgba32f, sampled=false),
     #[spirv(ray_payload)] payload: &mut Vec3,
@@ -94,6 +99,6 @@ pub fn main_ray_generation(
     let prev: Vec4 = image.read(pos);
 
     unsafe {
-        image.write(pos, prev + payload.extend(1.0));
+        image.write(pos, prev + (*payload * constants.x).extend(1.0));
     }
 }
