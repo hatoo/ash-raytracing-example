@@ -7,10 +7,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         "../ash-raytracing-example-shader",
         "spirv-unknown-vulkan1.2",
     )
-    .capability(Capability::RayTracingNV)
     .capability(Capability::RayTracingKHR)
     .extension("SPV_KHR_ray_tracing")
-    .extension("SPV_NV_ray_tracing")
     .print_metadata(MetadataPrintout::Full)
     .build()?;
 
