@@ -219,6 +219,8 @@ fn main() {
     let acceleration_structure =
         ash::extensions::khr::AccelerationStructure::new(&instance, &device);
 
+    let rt_pipeline = ash::extensions::khr::RayTracingPipeline::new(&instance, &device);
+
     let graphics_queue = unsafe { device.get_device_queue(queue_family_index, 0) };
 
     let command_pool = {
@@ -427,7 +429,7 @@ fn main() {
         (index_count, index_buffer)
     };
 
-    let geometry = [vk::AccelerationStructureGeometryKHR::builder()
+    let geometry = vk::AccelerationStructureGeometryKHR::builder()
         .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
         .geometry(vk::AccelerationStructureGeometryDataKHR {
             triangles: vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
@@ -448,7 +450,7 @@ fn main() {
                 .build(),
         })
         .flags(vk::GeometryFlagsKHR::OPAQUE)
-        .build()];
+        .build();
 
     // Create bottom-level acceleration structure
 
@@ -462,7 +464,7 @@ fn main() {
 
         let mut build_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
             .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
-            .geometries(&geometry)
+            .geometries(&[geometry])
             .mode(vk::BuildAccelerationStructureModeKHR::BUILD)
             .ty(vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL)
             .build();
@@ -759,154 +761,8 @@ fn main() {
 
         (top_as, top_as_buffer)
     };
-    /*
-
-    // Build acceleration structures
-    let scratch_buffer = {
-        let bottom_as_size = {
-            let requirements = unsafe {
-                ray_tracing.get_acceleration_structure_memory_requirements(
-                    &vk::AccelerationStructureMemoryRequirementsInfoNV::builder()
-                        .acceleration_structure(bottom_as)
-                        .ty(vk::AccelerationStructureMemoryRequirementsTypeNV::BUILD_SCRATCH)
-                        .build(),
-                )
-            };
-            requirements.memory_requirements.size
-        };
-
-        let top_as_size = {
-            let requirements = unsafe {
-                ray_tracing.get_acceleration_structure_memory_requirements(
-                    &vk::AccelerationStructureMemoryRequirementsInfoNV::builder()
-                        .acceleration_structure(top_as)
-                        .ty(vk::AccelerationStructureMemoryRequirementsTypeNV::BUILD_SCRATCH)
-                        .build(),
-                )
-            };
-            requirements.memory_requirements.size
-        };
-
-        let scratch_buffer_size = std::cmp::max(bottom_as_size, top_as_size);
-
-        let scratch_buffer = BufferResource::new(
-            scratch_buffer_size,
-            vk::BufferUsageFlags::RAY_TRACING_NV,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            &device,
-            device_memory_properties,
-        );
-
-        scratch_buffer
-    };
-
-    // Build
-
-    let build_command_buffer = {
-        let allocate_info = vk::CommandBufferAllocateInfo::builder()
-            .command_buffer_count(1)
-            .command_pool(command_pool)
-            .level(vk::CommandBufferLevel::PRIMARY)
-            .build();
-
-        let command_buffers = unsafe { device.allocate_command_buffers(&allocate_info) }.unwrap();
-        command_buffers[0]
-    };
-
-    unsafe {
-        device
-            .begin_command_buffer(
-                build_command_buffer,
-                &vk::CommandBufferBeginInfo::builder()
-                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
-                    .build(),
-            )
-            .unwrap();
-
-        let memory_barrier = vk::MemoryBarrier::builder()
-            .src_access_mask(
-                vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_NV
-                    | vk::AccessFlags::ACCELERATION_STRUCTURE_READ_NV,
-            )
-            .dst_access_mask(
-                vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_NV
-                    | vk::AccessFlags::ACCELERATION_STRUCTURE_READ_NV,
-            )
-            .build();
-
-        ray_tracing.cmd_build_acceleration_structure(
-            build_command_buffer,
-            &vk::AccelerationStructureInfoNV::builder()
-                .ty(vk::AccelerationStructureTypeNV::BOTTOM_LEVEL)
-                .geometries(&geometry)
-                .build(),
-            vk::Buffer::null(),
-            0,
-            false,
-            bottom_as,
-            vk::AccelerationStructureNV::null(),
-            scratch_buffer.buffer,
-            0,
-        );
-
-        device.cmd_pipeline_barrier(
-            build_command_buffer,
-            vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_NV,
-            vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_NV,
-            vk::DependencyFlags::empty(),
-            &[memory_barrier],
-            &[],
-            &[],
-        );
-
-        ray_tracing.cmd_build_acceleration_structure(
-            build_command_buffer,
-            &vk::AccelerationStructureInfoNV::builder()
-                .ty(vk::AccelerationStructureTypeNV::TOP_LEVEL)
-                .instance_count(instance_count as u32)
-                .build(),
-            instance_buffer.buffer,
-            0,
-            false,
-            top_as,
-            vk::AccelerationStructureNV::null(),
-            scratch_buffer.buffer,
-            0,
-        );
-
-        device.cmd_pipeline_barrier(
-            build_command_buffer,
-            vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_NV,
-            vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_NV,
-            vk::DependencyFlags::empty(),
-            &[memory_barrier],
-            &[],
-            &[],
-        );
-
-        device.end_command_buffer(build_command_buffer).unwrap();
-    }
-
-    unsafe {
-        device
-            .queue_submit(
-                graphics_queue,
-                &[vk::SubmitInfo::builder()
-                    .command_buffers(&[build_command_buffer])
-                    .build()],
-                vk::Fence::null(),
-            )
-            .expect("queue submit failed.");
-    }
-
-    unsafe {
-        device.queue_wait_idle(graphics_queue).unwrap();
-        device.free_command_buffers(command_pool, &[build_command_buffer]);
-        scratch_buffer.destroy(&device);
-    }
 
     // render pass
-
     let render_pass = {
         let color_attachment = vk::AttachmentDescription {
             flags: vk::AttachmentDescriptionFlags::empty(),
@@ -990,28 +846,28 @@ fn main() {
 
         let shader_groups = vec![
             // group0 = [ raygen ]
-            vk::RayTracingShaderGroupCreateInfoNV::builder()
-                .ty(vk::RayTracingShaderGroupTypeNV::GENERAL)
+            vk::RayTracingShaderGroupCreateInfoKHR::builder()
+                .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
                 .general_shader(0)
-                .closest_hit_shader(vk::SHADER_UNUSED_NV)
-                .any_hit_shader(vk::SHADER_UNUSED_NV)
-                .intersection_shader(vk::SHADER_UNUSED_NV)
+                .closest_hit_shader(vk::SHADER_UNUSED_KHR)
+                .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                .intersection_shader(vk::SHADER_UNUSED_KHR)
                 .build(),
             // group1 = [ chit ]
-            vk::RayTracingShaderGroupCreateInfoNV::builder()
-                .ty(vk::RayTracingShaderGroupTypeNV::TRIANGLES_HIT_GROUP)
-                .general_shader(vk::SHADER_UNUSED_NV)
+            vk::RayTracingShaderGroupCreateInfoKHR::builder()
+                .ty(vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP)
+                .general_shader(vk::SHADER_UNUSED_KHR)
                 .closest_hit_shader(1)
-                .any_hit_shader(vk::SHADER_UNUSED_NV)
-                .intersection_shader(vk::SHADER_UNUSED_NV)
+                .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                .intersection_shader(vk::SHADER_UNUSED_KHR)
                 .build(),
             // group2 = [ miss ]
-            vk::RayTracingShaderGroupCreateInfoNV::builder()
-                .ty(vk::RayTracingShaderGroupTypeNV::GENERAL)
+            vk::RayTracingShaderGroupCreateInfoKHR::builder()
+                .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
                 .general_shader(2)
-                .closest_hit_shader(vk::SHADER_UNUSED_NV)
-                .any_hit_shader(vk::SHADER_UNUSED_NV)
-                .intersection_shader(vk::SHADER_UNUSED_NV)
+                .closest_hit_shader(vk::SHADER_UNUSED_KHR)
+                .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                .intersection_shader(vk::SHADER_UNUSED_KHR)
                 .build(),
         ];
 
@@ -1034,12 +890,13 @@ fn main() {
         ];
 
         let pipeline = unsafe {
-            ray_tracing.create_ray_tracing_pipelines(
+            rt_pipeline.create_ray_tracing_pipelines(
+                vk::DeferredOperationKHR::null(),
                 vk::PipelineCache::null(),
-                &[vk::RayTracingPipelineCreateInfoNV::builder()
+                &[vk::RayTracingPipelineCreateInfoKHR::builder()
                     .stages(&shader_stages)
                     .groups(&shader_groups)
-                    .max_recursion_depth(1)
+                    .max_pipeline_ray_recursion_depth(1)
                     .layout(pipeline_layout)
                     .build()],
                 None,
@@ -1603,7 +1460,6 @@ fn main() {
     unsafe {
         instance.destroy_instance(None);
     }
-    */
 }
 
 fn check_validation_layer_support<'a>(
