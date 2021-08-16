@@ -698,39 +698,6 @@ fn main() {
         (top_as, top_as_buffer)
     };
 
-    // render pass
-    let render_pass = {
-        let color_attachment = vk::AttachmentDescription {
-            flags: vk::AttachmentDescriptionFlags::empty(),
-            format: COLOR_FORMAT,
-            samples: vk::SampleCountFlags::TYPE_1,
-            load_op: vk::AttachmentLoadOp::CLEAR,
-            store_op: vk::AttachmentStoreOp::STORE,
-            stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
-            stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
-            initial_layout: vk::ImageLayout::UNDEFINED,
-            final_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-        };
-
-        let color_attachment_ref = vk::AttachmentReference {
-            attachment: 0,
-            layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-        };
-
-        let subpass = vk::SubpassDescription::builder()
-            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-            .color_attachments(&[color_attachment_ref])
-            .build();
-
-        let renderpass_create_info = vk::RenderPassCreateInfo::builder()
-            .attachments(&[color_attachment])
-            .subpasses(&[subpass])
-            .build();
-
-        unsafe { device.create_render_pass(&renderpass_create_info, None) }
-            .expect("Failed to create render pass!")
-    };
-
     let (descriptor_set_layout, graphics_pipeline, pipeline_layout) = {
         let mut binding_flags = vk::DescriptorSetLayoutBindingFlagsCreateInfoEXT::builder()
             .binding_flags(&[
@@ -845,19 +812,6 @@ fn main() {
         }
 
         (descriptor_set_layout, pipeline, pipeline_layout)
-    };
-
-    let framebuffer = {
-        let framebuffer_create_info = vk::FramebufferCreateInfo::builder()
-            .render_pass(render_pass)
-            .attachments(&[image_view])
-            .width(WIDTH)
-            .height(HEIGHT)
-            .layers(1)
-            .build();
-
-        unsafe { device.create_framebuffer(&framebuffer_create_info, None) }
-            .expect("Failed to create Framebuffer!")
     };
 
     let command_buffer = {
@@ -1350,8 +1304,6 @@ fn main() {
         device.destroy_command_pool(command_pool, None);
     }
 
-    unsafe { device.destroy_framebuffer(framebuffer, None) };
-
     unsafe {
         // device.destroy_descriptor_set_layout(layout, allocation_callbacks)
         device.destroy_descriptor_pool(descriptor_pool, None);
@@ -1362,10 +1314,6 @@ fn main() {
 
     unsafe {
         device.destroy_pipeline_layout(pipeline_layout, None);
-    }
-
-    unsafe {
-        device.destroy_render_pass(render_pass, None);
     }
 
     unsafe {
