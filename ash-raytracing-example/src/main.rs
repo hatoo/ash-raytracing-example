@@ -146,13 +146,6 @@ fn main() {
             .expect("Failed to create logical Device!")
     };
 
-    /*
-    let ray_tracing = ash::extensions::nv::RayTracing::new(&instance, &device);
-
-    let rt_properties =
-        unsafe { ash::extensions::nv::RayTracing::get_properties(&instance, physical_device) };
-    */
-
     let mut rt_pipeline_properties = vk::PhysicalDeviceRayTracingPipelinePropertiesKHR::default();
 
     {
