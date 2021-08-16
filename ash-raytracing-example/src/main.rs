@@ -1086,46 +1086,6 @@ fn main() {
                 &[image_barrier],
             );
 
-            let image_barrier2 = vk::ImageMemoryBarrier::builder()
-                .src_access_mask(vk::AccessFlags::SHADER_WRITE | vk::AccessFlags::SHADER_READ)
-                .dst_access_mask(vk::AccessFlags::SHADER_WRITE | vk::AccessFlags::SHADER_READ)
-                .old_layout(vk::ImageLayout::GENERAL)
-                .new_layout(vk::ImageLayout::GENERAL)
-                .image(image)
-                .subresource_range(
-                    vk::ImageSubresourceRange::builder()
-                        .aspect_mask(vk::ImageAspectFlags::COLOR)
-                        .base_mip_level(0)
-                        .level_count(1)
-                        .base_array_layer(0)
-                        .layer_count(1)
-                        .build(),
-                )
-                .build();
-
-            for _ in 0..N_SAMPLES {
-                rt_pipeline.cmd_trace_rays(
-                    command_buffer,
-                    &sbt_raygen_region,
-                    &sbt_miss_region,
-                    &sbt_hit_region,
-                    &sbt_call_region,
-                    WIDTH,
-                    HEIGHT,
-                    1,
-                );
-
-                device.cmd_pipeline_barrier(
-                    command_buffer,
-                    vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
-                    vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
-                    vk::DependencyFlags::empty(),
-                    &[],
-                    &[],
-                    &[image_barrier2],
-                );
-            }
-
             device.end_command_buffer(command_buffer).unwrap();
         }
 
@@ -1143,6 +1103,109 @@ fn main() {
                 .expect("Failed to execute queue submit.");
 
             device.wait_for_fences(&[fence], true, u64::MAX).unwrap();
+            device.free_command_buffers(command_pool, &[command_buffer]);
+        }
+
+        let image_barrier2 = vk::ImageMemoryBarrier::builder()
+            .src_access_mask(vk::AccessFlags::SHADER_WRITE | vk::AccessFlags::SHADER_READ)
+            .dst_access_mask(vk::AccessFlags::SHADER_WRITE | vk::AccessFlags::SHADER_READ)
+            .old_layout(vk::ImageLayout::GENERAL)
+            .new_layout(vk::ImageLayout::GENERAL)
+            .image(image)
+            .subresource_range(
+                vk::ImageSubresourceRange::builder()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1)
+                    .build(),
+            )
+            .build();
+
+        let mut sampled = 0;
+
+        while sampled < N_SAMPLES {
+            let samples = std::cmp::min(N_SAMPLES - sampled, N_SAMPLES_ITER);
+            sampled += samples;
+
+            let command_buffer = {
+                let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+                    .command_buffer_count(1)
+                    .command_pool(command_pool)
+                    .level(vk::CommandBufferLevel::PRIMARY)
+                    .build();
+
+                unsafe { device.allocate_command_buffers(&command_buffer_allocate_info) }
+                    .expect("Failed to allocate Command Buffers!")[0]
+            };
+
+            {
+                let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
+                    .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)
+                    .build();
+
+                unsafe { device.begin_command_buffer(command_buffer, &command_buffer_begin_info) }
+                    .expect("Failed to begin recording Command Buffer at beginning!");
+            }
+
+            unsafe {
+                device.cmd_bind_pipeline(
+                    command_buffer,
+                    vk::PipelineBindPoint::RAY_TRACING_KHR,
+                    graphics_pipeline,
+                );
+                device.cmd_bind_descriptor_sets(
+                    command_buffer,
+                    vk::PipelineBindPoint::RAY_TRACING_KHR,
+                    pipeline_layout,
+                    0,
+                    &[descriptor_set],
+                    &[],
+                );
+            }
+            for _ in 0..samples {
+                unsafe {
+                    device.cmd_pipeline_barrier(
+                        command_buffer,
+                        vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+                        vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+                        vk::DependencyFlags::empty(),
+                        &[],
+                        &[],
+                        &[image_barrier2],
+                    );
+
+                    rt_pipeline.cmd_trace_rays(
+                        command_buffer,
+                        &sbt_raygen_region,
+                        &sbt_miss_region,
+                        &sbt_hit_region,
+                        &sbt_call_region,
+                        WIDTH,
+                        HEIGHT,
+                        1,
+                    );
+                }
+            }
+            unsafe {
+                device.end_command_buffer(command_buffer).unwrap();
+
+                let submit_infos = [vk::SubmitInfo::builder()
+                    .command_buffers(&[command_buffer])
+                    .build()];
+
+                device
+                    .reset_fences(&[fence])
+                    .expect("Failed to reset Fence!");
+
+                device
+                    .queue_submit(graphics_queue, &submit_infos, fence)
+                    .expect("Failed to execute queue submit.");
+
+                device.wait_for_fences(&[fence], true, u64::MAX).unwrap();
+                device.free_command_buffers(command_pool, &[command_buffer]);
+            }
         }
     }
 

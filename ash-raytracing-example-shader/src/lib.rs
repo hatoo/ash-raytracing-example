@@ -9,7 +9,7 @@
 use spirv_std::macros::spirv;
 
 use spirv_std::{
-    glam::{uvec2, vec2, vec3, vec4, UVec3, Vec2, Vec3, Vec4, Vec4Swizzles},
+    glam::{uvec2, vec2, vec3, vec4, UVec3, Vec2, Vec3, Vec4},
     image::Image,
     ray_tracing::{AccelerationStructure, RayFlags},
 };
