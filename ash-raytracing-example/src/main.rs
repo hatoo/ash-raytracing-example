@@ -113,6 +113,7 @@ fn main() {
 
         let mut features12 = vk::PhysicalDeviceVulkan12Features::builder()
             .buffer_device_address(true)
+            .vulkan_memory_model(true)
             .build();
 
         let mut as_feature = vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
@@ -519,46 +520,41 @@ fn main() {
 
         let transform_2: [f32; 12] = [1.0, 0.0, 0.0, 1.5, 0.0, 1.0, 0.0, 1.1, 0.0, 0.0, 1.0, 0.0];
 
-        let instances = vec![vk::AccelerationStructureInstanceKHR {
-            transform: vk::TransformMatrixKHR {
-                matrix: transform_0,
-            },
-            instance_custom_index_and_mask: 0xff << 24,
-            instance_shader_binding_table_record_offset_and_flags:
-                vk::GeometryInstanceFlagsKHR::TRIANGLE_FACING_CULL_DISABLE.as_raw() << 24,
-            acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
-                device_handle: accel_handle,
-            },
-        }];
-
-        /*
         let instances = vec![
-            GeometryInstance::new(
-                transform_0,
-                0, /* instance id */
-                0xff,
-                0,
-                vk::GeometryInstanceFlagsNV::TRIANGLE_CULL_DISABLE_NV,
-                accel_handle,
-            ),
-            GeometryInstance::new(
-                transform_1,
-                1, /* instance id */
-                0xff,
-                0,
-                vk::GeometryInstanceFlagsNV::TRIANGLE_CULL_DISABLE_NV,
-                accel_handle,
-            ),
-            GeometryInstance::new(
-                transform_2,
-                2, /* instance id */
-                0xff,
-                0,
-                vk::GeometryInstanceFlagsNV::TRIANGLE_CULL_DISABLE_NV,
-                accel_handle,
-            ),
+            vk::AccelerationStructureInstanceKHR {
+                transform: vk::TransformMatrixKHR {
+                    matrix: transform_0,
+                },
+                instance_custom_index_and_mask: 0xff << 24,
+                instance_shader_binding_table_record_offset_and_flags:
+                    vk::GeometryInstanceFlagsKHR::TRIANGLE_FACING_CULL_DISABLE.as_raw() << 24,
+                acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
+                    device_handle: accel_handle,
+                },
+            },
+            vk::AccelerationStructureInstanceKHR {
+                transform: vk::TransformMatrixKHR {
+                    matrix: transform_1,
+                },
+                instance_custom_index_and_mask: 0xff << 24 | 1,
+                instance_shader_binding_table_record_offset_and_flags:
+                    vk::GeometryInstanceFlagsKHR::TRIANGLE_FACING_CULL_DISABLE.as_raw() << 24,
+                acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
+                    device_handle: accel_handle,
+                },
+            },
+            vk::AccelerationStructureInstanceKHR {
+                transform: vk::TransformMatrixKHR {
+                    matrix: transform_2,
+                },
+                instance_custom_index_and_mask: 0xff << 24 | 2,
+                instance_shader_binding_table_record_offset_and_flags:
+                    vk::GeometryInstanceFlagsKHR::TRIANGLE_FACING_CULL_DISABLE.as_raw() << 24,
+                acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
+                    device_handle: accel_handle,
+                },
+            },
         ];
-        */
 
         let instance_buffer_size =
             std::mem::size_of::<vk::AccelerationStructureInstanceKHR>() * instances.len();
@@ -758,7 +754,7 @@ fn main() {
                     .bindings(&[
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
-                            .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_NV)
+                            .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
                             .stage_flags(vk::ShaderStageFlags::RAYGEN_NV)
                             .binding(0)
                             .build(),
@@ -927,7 +923,7 @@ fn main() {
 
         let mut shader_binding_table_buffer = BufferResource::new(
             table_size as u64,
-            vk::BufferUsageFlags::TRANSFER_SRC,
+            vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS | vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE,
             &device,
             device_memory_properties,
@@ -957,7 +953,7 @@ fn main() {
 
     let descriptor_sizes = [
         vk::DescriptorPoolSize {
-            ty: vk::DescriptorType::ACCELERATION_STRUCTURE_NV,
+            ty: vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
             descriptor_count: 1,
         },
         vk::DescriptorPoolSize {
@@ -1053,38 +1049,23 @@ fn main() {
         let sbt_address =
             unsafe { get_buffer_device_address(&device, shader_binding_table_buffer.buffer) };
 
-        let sbt_raygen_buffer = shader_binding_table_buffer.buffer;
-        let sbt_raygen_offset = 0;
-
         let sbt_raygen_region = vk::StridedDeviceAddressRegionKHR::builder()
-            .device_address(sbt_address + sbt_raygen_offset)
+            .device_address(sbt_address + 0)
             .size(handle_size_aligned)
             .stride(handle_size_aligned)
             .build();
-
-        let sbt_miss_buffer = shader_binding_table_buffer.buffer;
-        let sbt_miss_offset = 2 * handle_size_aligned;
-        let sbt_miss_stride = handle_size_aligned;
 
         let sbt_miss_region = vk::StridedDeviceAddressRegionKHR::builder()
-            .device_address(sbt_address + sbt_miss_offset)
+            .device_address(sbt_address + 2 * handle_size_aligned)
             .size(handle_size_aligned)
             .stride(handle_size_aligned)
             .build();
-
-        let sbt_hit_buffer = shader_binding_table_buffer.buffer;
-        let sbt_hit_offset = 1 * handle_size_aligned;
-        let sbt_hit_stride = handle_size_aligned;
 
         let sbt_hit_region = vk::StridedDeviceAddressRegionKHR::builder()
-            .device_address(sbt_address + sbt_hit_offset)
+            .device_address(sbt_address + 1 * handle_size_aligned)
             .size(handle_size_aligned)
             .stride(handle_size_aligned)
             .build();
-
-        let sbt_call_buffer = vk::Buffer::null();
-        let sbt_call_offset = 0;
-        let sbt_call_stride = 0;
 
         let sbt_call_region = vk::StridedDeviceAddressRegionKHR::default();
 
