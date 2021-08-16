@@ -846,15 +846,11 @@ fn main() {
         let shader_stages = vec![
             vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::RAYGEN_NV)
-                // .module(rgen_shader_module)
-                // .name(std::ffi::CStr::from_bytes_with_nul(b"main\0").unwrap())
                 .module(shader_module)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"main_ray_generation\0").unwrap())
                 .build(),
             vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::CLOSEST_HIT_NV)
-                // .module(chit_shader_module)
-                // .name(std::ffi::CStr::from_bytes_with_nul(b"main\0").unwrap())
                 .module(shader_module)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"main_closest_hit\0").unwrap())
                 .build(),
@@ -862,8 +858,6 @@ fn main() {
                 .stage(vk::ShaderStageFlags::MISS_NV)
                 .module(shader_module)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"main_miss\0").unwrap())
-                // .module(miss_shader_module)
-                // .name(std::ffi::CStr::from_bytes_with_nul(b"main\0").unwrap())
                 .build(),
         ];
 
@@ -880,6 +874,10 @@ fn main() {
             )
         }
         .unwrap()[0];
+
+        unsafe {
+            device.destroy_shader_module(shader_module, None);
+        }
 
         (descriptor_set_layout, pipeline, pipeline_layout)
     };
