@@ -484,7 +484,7 @@ fn main() {
 
     let accel_handle = unsafe { ray_tracing.get_acceleration_structure_handle(bottom_as) }.unwrap();
 
-    let (instance_count, instance_buffer, instance_memory) = {
+    let (instance_count, instance_buffer) = {
         let transform_0: [f32; 12] = [1.0, 0.0, 0.0, -1.5, 0.0, 1.0, 0.0, 1.1, 0.0, 0.0, 1.0, 0.0];
 
         let transform_1: [f32; 12] = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.1, 0.0, 0.0, 1.0, 0.0];
@@ -520,54 +520,17 @@ fn main() {
 
         let instance_buffer_size = std::mem::size_of::<GeometryInstance>() * instances.len();
 
-        let buffer_create_info = vk::BufferCreateInfo::builder()
-            .size(instance_buffer_size as u64)
-            .usage(vk::BufferUsageFlags::RAY_TRACING_NV)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .build();
-
-        let buffer = unsafe { device.create_buffer(&buffer_create_info, None) }.unwrap();
-
-        let memory_req = unsafe { device.get_buffer_memory_requirements(buffer) };
-
-        let memory_index = get_memory_type_index(
-            device_memory_properties,
-            memory_req.memory_type_bits,
+        let mut instance_buffer = BufferResource::new(
+            instance_buffer_size as vk::DeviceSize,
+            vk::BufferUsageFlags::RAY_TRACING_NV,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            &device,
+            device_memory_properties,
         );
 
-        let allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: memory_req.size,
-            memory_type_index: memory_index,
-            ..Default::default()
-        };
+        instance_buffer.store(&instances, &device);
 
-        let memory = unsafe { device.allocate_memory(&allocate_info, None).unwrap() };
-
-        unsafe { device.bind_buffer_memory(buffer, memory, 0) }.unwrap();
-
-        let mapped_ptr = unsafe {
-            device.map_memory(
-                memory,
-                0,
-                instance_buffer_size as u64,
-                vk::MemoryMapFlags::empty(),
-            )
-        }
-        .unwrap();
-
-        let mut mapped_slice = unsafe {
-            Align::new(
-                mapped_ptr,
-                std::mem::align_of::<GeometryInstance>() as u64,
-                instance_buffer_size as u64,
-            )
-        };
-        mapped_slice.copy_from_slice(&instances);
-        unsafe {
-            device.unmap_memory(memory);
-        }
-        (instances.len(), buffer, memory)
+        (instances.len(), instance_buffer)
     };
 
     let top_as = {
@@ -746,7 +709,7 @@ fn main() {
                 .ty(vk::AccelerationStructureTypeNV::TOP_LEVEL)
                 .instance_count(instance_count as u32)
                 .build(),
-            instance_buffer,
+            instance_buffer.buffer,
             0,
             false,
             top_as,
@@ -1555,7 +1518,9 @@ fn main() {
     }
 
     unsafe {
+        instance_buffer.destroy(&device);
         vertex_buffer.destroy(&device);
+        index_buffer.destroy(&device);
     }
 
     unsafe {
