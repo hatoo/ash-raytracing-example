@@ -10,65 +10,13 @@ use std::{
 use ash::{
     prelude::VkResult,
     util::Align,
-    vk::{self, AccelerationStructureBuildRangeInfoKHR},
+    vk::{self},
 };
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 struct Vertex {
     pos: [f32; 3],
-}
-
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
-struct GeometryInstance {
-    transform: [f32; 12],
-    instance_id_and_mask: u32,
-    instance_offset_and_flags: u32,
-    acceleration_handle: u64,
-}
-
-impl GeometryInstance {
-    fn new(
-        transform: [f32; 12],
-        id: u32,
-        mask: u8,
-        offset: u32,
-        flags: vk::GeometryInstanceFlagsNV,
-        acceleration_handle: u64,
-    ) -> Self {
-        let mut instance = GeometryInstance {
-            transform,
-            instance_id_and_mask: 0,
-            instance_offset_and_flags: 0,
-            acceleration_handle,
-        };
-        instance.set_id(id);
-        instance.set_mask(mask);
-        instance.set_offset(offset);
-        instance.set_flags(flags);
-        instance
-    }
-
-    fn set_id(&mut self, id: u32) {
-        let id = id & 0x00ffffff;
-        self.instance_id_and_mask |= id;
-    }
-
-    fn set_mask(&mut self, mask: u8) {
-        let mask = mask as u32;
-        self.instance_id_and_mask |= mask << 24;
-    }
-
-    fn set_offset(&mut self, offset: u32) {
-        let offset = offset & 0x00ffffff;
-        self.instance_offset_and_flags |= offset;
-    }
-
-    fn set_flags(&mut self, flags: vk::GeometryInstanceFlagsNV) {
-        let flags = flags.as_raw() as u32;
-        self.instance_offset_and_flags |= flags << 24;
-    }
 }
 
 fn main() {
@@ -550,7 +498,7 @@ fn main() {
                 )
                 .expect("queue submit failed.");
 
-            device.queue_wait_idle(graphics_queue);
+            device.queue_wait_idle(graphics_queue).unwrap();
             device.free_command_buffers(command_pool, &[build_command_buffer]);
             scratch_buffer.destroy(&device);
         }
@@ -947,23 +895,19 @@ fn main() {
     let shader_binding_table_buffer = {
         let group_count = 3; // Listed in vk::RayTracingPipelineCreateInfoNV
 
-        let mut incoming_table_data: Vec<u8> =
-            vec![0u8; group_count * rt_properties.shader_group_handle_size as usize];
-
-        unsafe {
-            ray_tracing
-                .get_ray_tracing_shader_group_handles(
-                    graphics_pipeline,
-                    0,
-                    group_count as u32,
-                    &mut incoming_table_data,
-                )
-                .unwrap();
+        let incoming_table_data = unsafe {
+            rt_pipeline.get_ray_tracing_shader_group_handles(
+                graphics_pipeline,
+                0,
+                group_count as u32,
+                group_count * rt_pipeline_properties.shader_group_handle_size as usize,
+            )
         }
+        .unwrap();
 
         let handle_size_aligned = aligned_size(
-            rt_properties.shader_group_handle_size,
-            rt_properties.shader_group_base_alignment,
+            rt_pipeline_properties.shader_group_handle_size,
+            rt_pipeline_properties.shader_group_base_alignment,
         );
 
         let table_size = group_count * handle_size_aligned as usize;
@@ -972,11 +916,12 @@ fn main() {
         for i in 0..group_count {
             table_data[i * handle_size_aligned as usize
                 ..i * handle_size_aligned as usize
-                    + rt_properties.shader_group_handle_size as usize]
+                    + rt_pipeline_properties.shader_group_handle_size as usize]
                 .copy_from_slice(
-                    &incoming_table_data[i * rt_properties.shader_group_handle_size as usize
-                        ..i * rt_properties.shader_group_handle_size as usize
-                            + rt_properties.shader_group_handle_size as usize],
+                    &incoming_table_data[i * rt_pipeline_properties.shader_group_handle_size
+                        as usize
+                        ..i * rt_pipeline_properties.shader_group_handle_size as usize
+                            + rt_pipeline_properties.shader_group_handle_size as usize],
                 );
         }
 
@@ -1050,7 +995,7 @@ fn main() {
     let descriptor_set = descriptor_sets[0];
 
     let accel_structs = [top_as];
-    let mut accel_info = vk::WriteDescriptorSetAccelerationStructureNV::builder()
+    let mut accel_info = vk::WriteDescriptorSetAccelerationStructureKHR::builder()
         .acceleration_structures(&accel_structs)
         .build();
 
@@ -1058,7 +1003,7 @@ fn main() {
         .dst_set(descriptor_set)
         .dst_binding(0)
         .dst_array_element(0)
-        .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_NV)
+        .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
         .push_next(&mut accel_info)
         .build();
 
@@ -1097,56 +1042,72 @@ fn main() {
 
     {
         let handle_size_aligned = aligned_size(
-            rt_properties.shader_group_handle_size,
-            rt_properties.shader_group_base_alignment,
+            rt_pipeline_properties.shader_group_handle_size,
+            rt_pipeline_properties.shader_group_base_alignment,
         ) as u64;
 
         // |[ raygen shader ]|[ hit shader  ]|[ miss shader ]|
         // |                 |               |               |
         // | 0               | 1             | 2             | 3
 
+        let sbt_address =
+            unsafe { get_buffer_device_address(&device, shader_binding_table_buffer.buffer) };
+
         let sbt_raygen_buffer = shader_binding_table_buffer.buffer;
         let sbt_raygen_offset = 0;
+
+        let sbt_raygen_region = vk::StridedDeviceAddressRegionKHR::builder()
+            .device_address(sbt_address + sbt_raygen_offset)
+            .size(handle_size_aligned)
+            .stride(handle_size_aligned)
+            .build();
 
         let sbt_miss_buffer = shader_binding_table_buffer.buffer;
         let sbt_miss_offset = 2 * handle_size_aligned;
         let sbt_miss_stride = handle_size_aligned;
 
+        let sbt_miss_region = vk::StridedDeviceAddressRegionKHR::builder()
+            .device_address(sbt_address + sbt_miss_offset)
+            .size(handle_size_aligned)
+            .stride(handle_size_aligned)
+            .build();
+
         let sbt_hit_buffer = shader_binding_table_buffer.buffer;
         let sbt_hit_offset = 1 * handle_size_aligned;
         let sbt_hit_stride = handle_size_aligned;
+
+        let sbt_hit_region = vk::StridedDeviceAddressRegionKHR::builder()
+            .device_address(sbt_address + sbt_hit_offset)
+            .size(handle_size_aligned)
+            .stride(handle_size_aligned)
+            .build();
 
         let sbt_call_buffer = vk::Buffer::null();
         let sbt_call_offset = 0;
         let sbt_call_stride = 0;
 
+        let sbt_call_region = vk::StridedDeviceAddressRegionKHR::default();
+
         unsafe {
             device.cmd_bind_pipeline(
                 command_buffer,
-                vk::PipelineBindPoint::RAY_TRACING_NV,
+                vk::PipelineBindPoint::RAY_TRACING_KHR,
                 graphics_pipeline,
             );
             device.cmd_bind_descriptor_sets(
                 command_buffer,
-                vk::PipelineBindPoint::RAY_TRACING_NV,
+                vk::PipelineBindPoint::RAY_TRACING_KHR,
                 pipeline_layout,
                 0,
                 &[descriptor_set],
                 &[],
             );
-            ray_tracing.cmd_trace_rays(
+            rt_pipeline.cmd_trace_rays(
                 command_buffer,
-                sbt_raygen_buffer,
-                sbt_raygen_offset,
-                sbt_miss_buffer,
-                sbt_miss_offset,
-                sbt_miss_stride,
-                sbt_hit_buffer,
-                sbt_hit_offset,
-                sbt_hit_stride,
-                sbt_call_buffer,
-                sbt_call_offset,
-                sbt_call_stride,
+                &sbt_raygen_region,
+                &sbt_miss_region,
+                &sbt_hit_region,
+                &sbt_call_region,
                 WIDTH,
                 HEIGHT,
                 1,
@@ -1435,11 +1396,11 @@ fn main() {
     }
 
     unsafe {
-        ray_tracing.destroy_acceleration_structure(bottom_as, None);
-        device.free_memory(bottom_as_memory, None);
+        acceleration_structure.destroy_acceleration_structure(bottom_as, None);
+        bottom_as_buffer.destroy(&device);
 
-        ray_tracing.destroy_acceleration_structure(top_as, None);
-        device.free_memory(top_as_memory, None);
+        acceleration_structure.destroy_acceleration_structure(top_as, None);
+        top_as_buffer.destroy(&device);
 
         device.destroy_image_view(image_view, None);
         device.destroy_image(image, None);
