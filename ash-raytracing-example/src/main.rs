@@ -135,7 +135,6 @@ fn main() {
                 ash::extensions::khr::RayTracingPipeline::name().as_ptr(),
                 ash::extensions::khr::AccelerationStructure::name().as_ptr(),
                 ash::extensions::khr::DeferredHostOperations::name().as_ptr(),
-                ash::extensions::nv::RayTracing::name().as_ptr(),
                 vk::KhrSpirv14Fn::name().as_ptr(),
                 vk::ExtScalarBlockLayoutFn::name().as_ptr(),
                 vk::KhrGetMemoryRequirements2Fn::name().as_ptr(),
@@ -748,19 +747,19 @@ fn main() {
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
-                            .stage_flags(vk::ShaderStageFlags::RAYGEN_NV)
+                            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                             .binding(0)
                             .build(),
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-                            .stage_flags(vk::ShaderStageFlags::RAYGEN_NV)
+                            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                             .binding(1)
                             .build(),
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_NV)
+                            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
                             .binding(2)
                             .build(),
                     ])
@@ -810,17 +809,17 @@ fn main() {
 
         let shader_stages = vec![
             vk::PipelineShaderStageCreateInfo::builder()
-                .stage(vk::ShaderStageFlags::RAYGEN_NV)
+                .stage(vk::ShaderStageFlags::RAYGEN_KHR)
                 .module(shader_module)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"main_ray_generation\0").unwrap())
                 .build(),
             vk::PipelineShaderStageCreateInfo::builder()
-                .stage(vk::ShaderStageFlags::CLOSEST_HIT_NV)
+                .stage(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
                 .module(shader_module)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"main_closest_hit\0").unwrap())
                 .build(),
             vk::PipelineShaderStageCreateInfo::builder()
-                .stage(vk::ShaderStageFlags::MISS_NV)
+                .stage(vk::ShaderStageFlags::MISS_KHR)
                 .module(shader_module)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"main_miss\0").unwrap())
                 .build(),
@@ -882,7 +881,7 @@ fn main() {
     }
 
     let shader_binding_table_buffer = {
-        let group_count = 3; // Listed in vk::RayTracingPipelineCreateInfoNV
+        let group_count = 3;
 
         let incoming_table_data = unsafe {
             rt_pipeline.get_ray_tracing_shader_group_handles(

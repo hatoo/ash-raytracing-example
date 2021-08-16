@@ -1,6 +1,6 @@
 # ash-raytracing-example
 
-An example of raytracing using [ash](https://github.com/MaikKlein/ash) and [rust-gpu](https://github.com/EmbarkStudios/rust-gpu).
+An example of KHR raytracing using [ash](https://github.com/MaikKlein/ash) and [rust-gpu](https://github.com/EmbarkStudios/rust-gpu).
 
 ## Run
 
