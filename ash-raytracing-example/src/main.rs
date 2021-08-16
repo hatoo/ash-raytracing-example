@@ -615,36 +615,18 @@ fn main() {
         requirements.memory_requirements.size
     };
 
-    let (scratch_buffer, scratch_memory) = {
+    let scratch_buffer = {
         let scratch_buffer_size = std::cmp::max(bottom_as_size, top_as_size);
 
-        let buffer_create_info = vk::BufferCreateInfo::builder()
-            .size(scratch_buffer_size as u64)
-            .usage(vk::BufferUsageFlags::RAY_TRACING_NV)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .build();
-
-        let buffer = unsafe { device.create_buffer(&buffer_create_info, None) }.unwrap();
-
-        let memory_req = unsafe { device.get_buffer_memory_requirements(buffer) };
-
-        let memory_index = get_memory_type_index(
-            device_memory_properties,
-            memory_req.memory_type_bits,
+        let scratch_buffer = BufferResource::new(
+            scratch_buffer_size,
+            vk::BufferUsageFlags::RAY_TRACING_NV,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            &device,
+            device_memory_properties,
         );
 
-        let allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: memory_req.size,
-            memory_type_index: memory_index,
-            ..Default::default()
-        };
-
-        let memory = unsafe { device.allocate_memory(&allocate_info, None).unwrap() };
-
-        unsafe { device.bind_buffer_memory(buffer, memory, 0) }.unwrap();
-
-        (buffer, memory)
+        scratch_buffer
     };
 
     // Build
@@ -693,7 +675,7 @@ fn main() {
             false,
             bottom_as,
             vk::AccelerationStructureNV::null(),
-            scratch_buffer,
+            scratch_buffer.buffer,
             0,
         );
     }
@@ -722,7 +704,7 @@ fn main() {
             false,
             top_as,
             vk::AccelerationStructureNV::null(),
-            scratch_buffer,
+            scratch_buffer.buffer,
             0,
         );
     }
@@ -1496,6 +1478,11 @@ fn main() {
     }
 
     // clean up
+
+    unsafe {
+        // TODO release more earlier
+        scratch_buffer.destroy(&device);
+    }
 
     unsafe {
         device.destroy_fence(fence, None);
