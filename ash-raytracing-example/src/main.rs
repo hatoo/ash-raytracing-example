@@ -729,6 +729,7 @@ fn main() {
     unsafe {
         device.queue_wait_idle(graphics_queue).unwrap();
         device.free_command_buffers(command_pool, &[build_command_buffer]);
+        scratch_buffer.destroy(&device);
     }
 
     // render pass
@@ -1376,11 +1377,6 @@ fn main() {
     }
 
     // clean up
-
-    unsafe {
-        // TODO release more earlier
-        scratch_buffer.destroy(&device);
-    }
 
     unsafe {
         device.destroy_fence(fence, None);
