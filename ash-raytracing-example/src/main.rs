@@ -355,6 +355,7 @@ fn main() {
 
             device.wait_for_fences(&[fence], true, u64::MAX).unwrap();
             device.destroy_fence(fence, None);
+            device.free_command_buffers(command_pool, &[command_buffer]);
         }
     }
 
@@ -590,32 +591,31 @@ fn main() {
     };
 
     // Build acceleration structures
-
-    let bottom_as_size = {
-        let requirements = unsafe {
-            ray_tracing.get_acceleration_structure_memory_requirements(
-                &vk::AccelerationStructureMemoryRequirementsInfoNV::builder()
-                    .acceleration_structure(bottom_as)
-                    .ty(vk::AccelerationStructureMemoryRequirementsTypeNV::BUILD_SCRATCH)
-                    .build(),
-            )
-        };
-        requirements.memory_requirements.size
-    };
-
-    let top_as_size = {
-        let requirements = unsafe {
-            ray_tracing.get_acceleration_structure_memory_requirements(
-                &vk::AccelerationStructureMemoryRequirementsInfoNV::builder()
-                    .acceleration_structure(top_as)
-                    .ty(vk::AccelerationStructureMemoryRequirementsTypeNV::BUILD_SCRATCH)
-                    .build(),
-            )
-        };
-        requirements.memory_requirements.size
-    };
-
     let scratch_buffer = {
+        let bottom_as_size = {
+            let requirements = unsafe {
+                ray_tracing.get_acceleration_structure_memory_requirements(
+                    &vk::AccelerationStructureMemoryRequirementsInfoNV::builder()
+                        .acceleration_structure(bottom_as)
+                        .ty(vk::AccelerationStructureMemoryRequirementsTypeNV::BUILD_SCRATCH)
+                        .build(),
+                )
+            };
+            requirements.memory_requirements.size
+        };
+
+        let top_as_size = {
+            let requirements = unsafe {
+                ray_tracing.get_acceleration_structure_memory_requirements(
+                    &vk::AccelerationStructureMemoryRequirementsInfoNV::builder()
+                        .acceleration_structure(top_as)
+                        .ty(vk::AccelerationStructureMemoryRequirementsTypeNV::BUILD_SCRATCH)
+                        .build(),
+                )
+            };
+            requirements.memory_requirements.size
+        };
+
         let scratch_buffer_size = std::cmp::max(bottom_as_size, top_as_size);
 
         let scratch_buffer = BufferResource::new(
@@ -643,27 +643,26 @@ fn main() {
     };
 
     unsafe {
-        device.begin_command_buffer(
-            build_command_buffer,
-            &vk::CommandBufferBeginInfo::builder()
-                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
-                .build(),
-        )
-    }
-    .unwrap();
+        device
+            .begin_command_buffer(
+                build_command_buffer,
+                &vk::CommandBufferBeginInfo::builder()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
+                    .build(),
+            )
+            .unwrap();
 
-    let memory_barrier = vk::MemoryBarrier::builder()
-        .src_access_mask(
-            vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_NV
-                | vk::AccessFlags::ACCELERATION_STRUCTURE_READ_NV,
-        )
-        .dst_access_mask(
-            vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_NV
-                | vk::AccessFlags::ACCELERATION_STRUCTURE_READ_NV,
-        )
-        .build();
+        let memory_barrier = vk::MemoryBarrier::builder()
+            .src_access_mask(
+                vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_NV
+                    | vk::AccessFlags::ACCELERATION_STRUCTURE_READ_NV,
+            )
+            .dst_access_mask(
+                vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_NV
+                    | vk::AccessFlags::ACCELERATION_STRUCTURE_READ_NV,
+            )
+            .build();
 
-    unsafe {
         ray_tracing.cmd_build_acceleration_structure(
             build_command_buffer,
             &vk::AccelerationStructureInfoNV::builder()
@@ -678,9 +677,7 @@ fn main() {
             scratch_buffer.buffer,
             0,
         );
-    }
 
-    unsafe {
         device.cmd_pipeline_barrier(
             build_command_buffer,
             vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_NV,
@@ -690,9 +687,7 @@ fn main() {
             &[],
             &[],
         );
-    }
 
-    unsafe {
         ray_tracing.cmd_build_acceleration_structure(
             build_command_buffer,
             &vk::AccelerationStructureInfoNV::builder()
@@ -707,9 +702,7 @@ fn main() {
             scratch_buffer.buffer,
             0,
         );
-    }
 
-    unsafe {
         device.cmd_pipeline_barrier(
             build_command_buffer,
             vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_NV,
@@ -719,9 +712,7 @@ fn main() {
             &[],
             &[],
         );
-    }
 
-    unsafe {
         device.end_command_buffer(build_command_buffer).unwrap();
     }
 
