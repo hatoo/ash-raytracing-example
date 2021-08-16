@@ -217,15 +217,6 @@ fn main() {
             .expect("Failed to create Command Pool!")
     };
 
-    /*
-    let pipeline_layout = {
-        let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::default();
-
-        unsafe { device.create_pipeline_layout(&pipeline_layout_create_info, None) }
-            .expect("Failed to create pipeline layout!")
-    };
-    */
-
     let device_memory_properties =
         unsafe { instance.get_physical_device_memory_properties(physical_device) };
 
@@ -286,56 +277,59 @@ fn main() {
         unsafe { device.create_image_view(&image_view_create_info, None) }.unwrap()
     };
 
-    let command_buffer = {
-        let allocate_info = vk::CommandBufferAllocateInfo::builder()
-            .command_buffer_count(1)
-            .command_pool(command_pool)
-            .level(vk::CommandBufferLevel::PRIMARY)
+    {
+        let command_buffer = {
+            let allocate_info = vk::CommandBufferAllocateInfo::builder()
+                .command_buffer_count(1)
+                .command_pool(command_pool)
+                .level(vk::CommandBufferLevel::PRIMARY)
+                .build();
+
+            let command_buffers =
+                unsafe { device.allocate_command_buffers(&allocate_info) }.unwrap();
+            command_buffers[0]
+        };
+
+        unsafe {
+            device.begin_command_buffer(
+                command_buffer,
+                &vk::CommandBufferBeginInfo::builder()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
+                    .build(),
+            )
+        }
+        .unwrap();
+
+        let image_barrier = vk::ImageMemoryBarrier::builder()
+            .src_access_mask(vk::AccessFlags::empty())
+            .dst_access_mask(vk::AccessFlags::empty())
+            .old_layout(vk::ImageLayout::UNDEFINED)
+            .new_layout(vk::ImageLayout::GENERAL)
+            .image(image)
+            .subresource_range(
+                vk::ImageSubresourceRange::builder()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1)
+                    .build(),
+            )
             .build();
 
-        let command_buffers = unsafe { device.allocate_command_buffers(&allocate_info) }.unwrap();
-        command_buffers[0]
-    };
+        unsafe {
+            device.cmd_pipeline_barrier(
+                command_buffer,
+                vk::PipelineStageFlags::ALL_COMMANDS,
+                vk::PipelineStageFlags::ALL_COMMANDS,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[image_barrier],
+            );
 
-    unsafe {
-        device.begin_command_buffer(
-            command_buffer,
-            &vk::CommandBufferBeginInfo::builder()
-                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
-                .build(),
-        )
-    }
-    .unwrap();
-
-    let image_barrier = vk::ImageMemoryBarrier::builder()
-        .src_access_mask(vk::AccessFlags::empty())
-        .dst_access_mask(vk::AccessFlags::empty())
-        .old_layout(vk::ImageLayout::UNDEFINED)
-        .new_layout(vk::ImageLayout::GENERAL)
-        .image(image)
-        .subresource_range(
-            vk::ImageSubresourceRange::builder()
-                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                .base_mip_level(0)
-                .level_count(1)
-                .base_array_layer(0)
-                .layer_count(1)
-                .build(),
-        )
-        .build();
-
-    unsafe {
-        device.cmd_pipeline_barrier(
-            command_buffer,
-            vk::PipelineStageFlags::ALL_COMMANDS,
-            vk::PipelineStageFlags::ALL_COMMANDS,
-            vk::DependencyFlags::empty(),
-            &[],
-            &[],
-            &[image_barrier],
-        );
-
-        device.end_command_buffer(command_buffer).unwrap();
+            device.end_command_buffer(command_buffer).unwrap();
+        }
 
         let fence = {
             let fence_create_info = vk::FenceCreateInfo::builder()
@@ -1637,6 +1631,10 @@ fn main() {
 
     unsafe {
         device.destroy_device(None);
+    }
+
+    unsafe {
+        instance.destroy_instance(None);
     }
 }
 
