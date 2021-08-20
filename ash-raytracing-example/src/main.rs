@@ -698,7 +698,7 @@ fn main() {
         (top_as, top_as_buffer)
     };
 
-    let (descriptor_set_layout, graphics_pipeline, pipeline_layout) = {
+    let (descriptor_set_layout, graphics_pipeline, pipeline_layout, shader_group_count) = {
         let mut binding_flags = vk::DescriptorSetLayoutBindingFlagsCreateInfoEXT::builder()
             .binding_flags(&[
                 vk::DescriptorBindingFlagsEXT::empty(),
@@ -811,7 +811,12 @@ fn main() {
             device.destroy_shader_module(shader_module, None);
         }
 
-        (descriptor_set_layout, pipeline, pipeline_layout)
+        (
+            descriptor_set_layout,
+            pipeline,
+            pipeline_layout,
+            shader_groups.len(),
+        )
     };
 
     let command_buffer = {
@@ -834,28 +839,26 @@ fn main() {
             .expect("Failed to begin recording Command Buffer at beginning!");
     }
 
-    let shader_binding_table_buffer = {
-        let group_count = 3;
+    let handle_size_aligned = aligned_size(
+        rt_pipeline_properties.shader_group_handle_size,
+        rt_pipeline_properties.shader_group_base_alignment,
+    ) as u64;
 
+    let shader_binding_table_buffer = {
         let incoming_table_data = unsafe {
             rt_pipeline.get_ray_tracing_shader_group_handles(
                 graphics_pipeline,
                 0,
-                group_count as u32,
-                group_count * rt_pipeline_properties.shader_group_handle_size as usize,
+                shader_group_count as u32,
+                shader_group_count * rt_pipeline_properties.shader_group_handle_size as usize,
             )
         }
         .unwrap();
 
-        let handle_size_aligned = aligned_size(
-            rt_pipeline_properties.shader_group_handle_size,
-            rt_pipeline_properties.shader_group_base_alignment,
-        );
-
-        let table_size = group_count * handle_size_aligned as usize;
+        let table_size = shader_group_count * handle_size_aligned as usize;
         let mut table_data = vec![0u8; table_size];
 
-        for i in 0..group_count {
+        for i in 0..shader_group_count {
             table_data[i * handle_size_aligned as usize
                 ..i * handle_size_aligned as usize
                     + rt_pipeline_properties.shader_group_handle_size as usize]
@@ -983,11 +986,6 @@ fn main() {
     }
 
     {
-        let handle_size_aligned = aligned_size(
-            rt_pipeline_properties.shader_group_handle_size,
-            rt_pipeline_properties.shader_group_base_alignment,
-        ) as u64;
-
         // |[ raygen shader ]|[ hit shader  ]|[ miss shader ]|
         // |                 |               |               |
         // | 0               | 1             | 2             | 3
