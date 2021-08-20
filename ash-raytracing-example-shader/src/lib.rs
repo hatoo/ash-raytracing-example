@@ -4,11 +4,15 @@
     feature(register_attr),
     register_attr(spirv)
 )]
+#![feature(asm)]
 
+use spirv_std::macros::gpu_only;
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
 
+use spirv_std::num_traits::Float;
 use spirv_std::{
+    arch::report_intersection,
     glam::{uvec2, vec2, vec3, vec4, UVec3, Vec2, Vec3, Vec4},
     image::Image,
     ray_tracing::{AccelerationStructure, RayFlags},
@@ -101,4 +105,82 @@ pub fn main_ray_generation(
     unsafe {
         image.write(pos, prev + (*payload * constants.x).extend(1.0));
     }
+}
+
+#[spirv(intersection)]
+pub fn sphere_intersection(
+    #[spirv(object_ray_origin)] ray_origin: Vec3,
+    #[spirv(object_ray_direction)] ray_direction: Vec3,
+    #[spirv(world_ray_origin)] world_ray_origin: Vec3,
+    #[spirv(world_ray_direction)] world_ray_direction: Vec3,
+    #[spirv(ray_tmin)] t_min: f32,
+    #[spirv(ray_tmax)] t_max: f32,
+    #[spirv(hit_attribute)] hit_pos: &mut Vec3,
+) {
+    let oc = ray_origin;
+    let a = ray_direction.length_squared();
+    let half_b = oc.dot(ray_direction);
+    let c = oc.length_squared() - 1.0;
+
+    let discriminant = half_b * half_b - a * c;
+    if discriminant < 0.0 {
+        return;
+    }
+
+    let sqrtd = discriminant.sqrt();
+
+    let root0 = (-half_b - sqrtd) / a;
+    let root1 = (-half_b + sqrtd) / a;
+
+    if root0 >= t_min {
+        if root0 <= t_max {
+            *hit_pos = world_ray_origin + root0 * world_ray_direction;
+            unsafe {
+                report_intersection(root0, 0);
+            }
+        }
+    }
+
+    if root1 >= t_min {
+        if root1 <= t_max {
+            *hit_pos = world_ray_origin + root1 * world_ray_direction;
+            unsafe {
+                report_intersection(root1, 0);
+            }
+        }
+    }
+}
+
+#[gpu_only]
+#[inline(never)]
+unsafe fn object_to_world() -> [Vec3; 4] {
+    let mut result = Default::default();
+
+    asm! {
+        "OpName %gl_ObjectToWorldEXT \"gl_ObjectToWorldEXT\"",
+        "OpDecorate %gl_ObjectToWorldEXT BuiltIn ObjectToWorldNV",
+        "%float = OpTypeFloat 32",
+        "%v3float = OpTypeVector %float 3",
+        "%mat4v3float = OpTypeMatrix %v3float 4",
+        "%_ptr_Input_mat4v3float = OpTypePointer Generic %mat4v3float",
+        "%gl_ObjectToWorldEXT = OpVariable %_ptr_Input_mat4v3float Input",
+        "%col0 = OpCompositeExtract %v3float %gl_ObjectToWorldEXT 0",
+        "%col1 = OpCompositeExtract %v3float %gl_ObjectToWorldEXT 1",
+        "%col2 = OpCompositeExtract %v3float %gl_ObjectToWorldEXT 2",
+        "%col3 = OpCompositeExtract %v3float %gl_ObjectToWorldEXT 3",
+        "%result = OpCompositeConstruct typeof*{result} %col0 %col1 %col2 %col3",
+        result = in(reg) &mut result,
+    }
+
+    result
+}
+
+#[gpu_only]
+#[spirv(closest_hit)]
+pub fn sphere_closest_hit(
+    #[spirv(hit_attribute)] hit_pos: &Vec3,
+    #[spirv(incoming_ray_payload)] out: &mut Vec3,
+) {
+    let result = unsafe { object_to_world() };
+    *out = *hit_pos - result[3];
 }
