@@ -167,15 +167,14 @@ pub fn main_ray_generation(
             );
         }
 
-        if payload.is_miss.0 == 1 {
+        if payload.is_miss.into() {
             color *= payload.position;
             break;
         } else {
             let mut scatter = Scatter::default();
             if materials[payload.material as usize]
                 .scatter(&ray, payload, &mut rng, &mut scatter)
-                .0
-                == 1
+                .into()
             {
                 color *= scatter.color;
                 ray = scatter.ray;

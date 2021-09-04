@@ -2,7 +2,7 @@ use core::ops::Not;
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 #[repr(transparent)]
-pub struct Bool32(pub u32);
+pub struct Bool32(u32);
 
 impl Bool32 {
     pub const TRUE: Self = Self(1);
