@@ -24,7 +24,7 @@ struct Vertex {
 }
 
 fn main() {
-    const ENABLE_VALIDATION_LAYER: bool = cfg!(debug_assertions);
+    const ENABLE_VALIDATION_LAYER: bool = true;
     const WIDTH: u32 = 1200;
     const HEIGHT: u32 = 800;
     const COLOR_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
@@ -106,9 +106,11 @@ fn main() {
     .unwrap();
 
     let device: ash::Device = {
+        let priorities = [1.0];
+
         let queue_create_info = vk::DeviceQueueCreateInfo::builder()
             .queue_family_index(queue_family_index)
-            .queue_priorities(&[1.0])
+            .queue_priorities(&priorities)
             .build();
 
         let mut features2 = vk::PhysicalDeviceFeatures2::default();
@@ -131,21 +133,24 @@ fn main() {
             .ray_tracing_pipeline(true)
             .build();
 
+        let queue_create_infos = [queue_create_info];
+        let enabled_extension_names = [
+            ash::extensions::khr::RayTracingPipeline::name().as_ptr(),
+            ash::extensions::khr::AccelerationStructure::name().as_ptr(),
+            ash::extensions::khr::DeferredHostOperations::name().as_ptr(),
+            vk::KhrSpirv14Fn::name().as_ptr(),
+            vk::ExtScalarBlockLayoutFn::name().as_ptr(),
+            vk::KhrGetMemoryRequirements2Fn::name().as_ptr(),
+        ];
+
         let device_create_info = vk::DeviceCreateInfo::builder()
             .push_next(&mut features2)
             .push_next(&mut features12)
             .push_next(&mut as_feature)
             .push_next(&mut raytracing_pipeline)
-            .queue_create_infos(&[queue_create_info])
+            .queue_create_infos(&queue_create_infos)
             .enabled_layer_names(validation_layers_ptr.as_slice())
-            .enabled_extension_names(&[
-                ash::extensions::khr::RayTracingPipeline::name().as_ptr(),
-                ash::extensions::khr::AccelerationStructure::name().as_ptr(),
-                ash::extensions::khr::DeferredHostOperations::name().as_ptr(),
-                vk::KhrSpirv14Fn::name().as_ptr(),
-                vk::ExtScalarBlockLayoutFn::name().as_ptr(),
-                vk::KhrGetMemoryRequirements2Fn::name().as_ptr(),
-            ])
+            .enabled_extension_names(&enabled_extension_names)
             .build();
 
         unsafe { instance.create_device(physical_device, &device_create_info, None) }
@@ -339,8 +344,7 @@ fn main() {
 
         let mut aabb_buffer = BufferResource::new(
             std::mem::size_of::<vk::AabbPositionsKHR>() as u64,
-            vk::BufferUsageFlags::VERTEX_BUFFER
-                | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
+            vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                 | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
             &device,
@@ -371,9 +375,11 @@ fn main() {
             .transform_offset(0)
             .build();
 
+        let geometries = [geometry];
+
         let mut build_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
             .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
-            .geometries(&[geometry])
+            .geometries(&geometries)
             .mode(vk::BuildAccelerationStructureModeKHR::BUILD)
             .ty(vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL)
             .build();
@@ -553,9 +559,11 @@ fn main() {
             .geometry(vk::AccelerationStructureGeometryDataKHR { instances })
             .build();
 
+        let geometries = [geometry];
+
         let mut build_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
             .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
-            .geometries(&[geometry])
+            .geometries(&geometries)
             .mode(vk::BuildAccelerationStructureModeKHR::BUILD)
             .ty(vk::AccelerationStructureTypeKHR::TOP_LEVEL)
             .build();
@@ -629,12 +637,14 @@ fn main() {
     };
 
     let (descriptor_set_layout, graphics_pipeline, pipeline_layout, shader_groups_len) = {
+        let binding_flags_inner = [
+            vk::DescriptorBindingFlagsEXT::empty(),
+            vk::DescriptorBindingFlagsEXT::empty(),
+            vk::DescriptorBindingFlagsEXT::empty(),
+        ];
+
         let mut binding_flags = vk::DescriptorSetLayoutBindingFlagsCreateInfoEXT::builder()
-            .binding_flags(&[
-                vk::DescriptorBindingFlagsEXT::empty(),
-                vk::DescriptorBindingFlagsEXT::empty(),
-                vk::DescriptorBindingFlagsEXT::empty(),
-            ])
+            .binding_flags(&binding_flags_inner)
             .build();
 
         let descriptor_set_layout = unsafe {
