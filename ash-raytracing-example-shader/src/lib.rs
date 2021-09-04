@@ -4,9 +4,8 @@
     feature(register_attr),
     register_attr(spirv)
 )]
-#![feature(asm)]
+#![feature(macro_attributes_in_derive_output)]
 
-use spirv_std::macros::gpu_only;
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
 
@@ -151,36 +150,43 @@ pub fn sphere_intersection(
     }
 }
 
-#[gpu_only]
-#[inline(never)]
-unsafe fn object_to_world() -> [Vec3; 4] {
-    let mut result = Default::default();
-
-    asm! {
-        "OpName %gl_ObjectToWorldEXT \"gl_ObjectToWorldEXT\"",
-        "OpDecorate %gl_ObjectToWorldEXT BuiltIn ObjectToWorldNV",
-        "%float = OpTypeFloat 32",
-        "%v3float = OpTypeVector %float 3",
-        "%mat4v3float = OpTypeMatrix %v3float 4",
-        "%_ptr_Input_mat4v3float = OpTypePointer Generic %mat4v3float",
-        "%gl_ObjectToWorldEXT = OpVariable %_ptr_Input_mat4v3float Input",
-        "%col0 = OpCompositeExtract %v3float %gl_ObjectToWorldEXT 0",
-        "%col1 = OpCompositeExtract %v3float %gl_ObjectToWorldEXT 1",
-        "%col2 = OpCompositeExtract %v3float %gl_ObjectToWorldEXT 2",
-        "%col3 = OpCompositeExtract %v3float %gl_ObjectToWorldEXT 3",
-        "%result = OpCompositeConstruct typeof*{result} %col0 %col1 %col2 %col3",
-        result = in(reg) &mut result,
-    }
-
-    result
+#[derive(Clone, Copy)]
+#[spirv(matrix)]
+pub struct Affine3 {
+    pub x: Vec3,
+    pub y: Vec3,
+    pub z: Vec3,
+    pub w: Vec3,
 }
 
-#[gpu_only]
+impl Affine3 {
+    pub const ZERO: Self = Self {
+        x: Vec3::ZERO,
+        y: Vec3::ZERO,
+        z: Vec3::ZERO,
+        w: Vec3::ZERO,
+    };
+
+    pub const IDENTITY: Self = Self {
+        x: Vec3::X,
+        y: Vec3::Y,
+        z: Vec3::Z,
+        w: Vec3::ZERO,
+    };
+}
+
+impl Default for Affine3 {
+    #[inline]
+    fn default() -> Self {
+        Self::IDENTITY
+    }
+}
+
 #[spirv(closest_hit)]
 pub fn sphere_closest_hit(
     #[spirv(hit_attribute)] hit_pos: &Vec3,
+    #[spirv(object_to_world)] object_to_world: Affine3,
     #[spirv(incoming_ray_payload)] out: &mut Vec3,
 ) {
-    let result = unsafe { object_to_world() };
-    *out = *hit_pos - result[3];
+    *out = object_to_world.w;
 }
