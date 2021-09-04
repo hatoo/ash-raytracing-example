@@ -117,28 +117,39 @@ pub fn main_ray_generation(
     let tmin = 0.001;
     let tmax = 1000.0;
 
-    *payload = RayPayload::default();
+    let mut color = vec3(1.0, 1.0, 1.0);
 
-    unsafe {
-        top_level_as.trace_ray(
-            RayFlags::OPAQUE,
-            cull_mask,
-            0,
-            0,
-            0,
-            origin,
-            tmin,
-            direction,
-            tmax,
-            payload,
-        );
+    for _ in 0..50 {
+        *payload = RayPayload::default();
+        unsafe {
+            top_level_as.trace_ray(
+                RayFlags::OPAQUE,
+                cull_mask,
+                0,
+                0,
+                0,
+                origin,
+                tmin,
+                direction,
+                tmax,
+                payload,
+            );
+        }
+
+        if payload.is_miss == 0 {
+            color *= vec3(1.0, 0.0, 0.0);
+            break;
+        } else {
+            color *= payload.position;
+            break;
+        }
     }
 
-    let pos = uvec2(launch_id.x, launch_id.y);
+    let pos = uvec2(launch_id.x, launch_size.y - 1 - launch_id.y);
     let prev: Vec4 = image.read(pos);
 
     unsafe {
-        image.write(pos, prev + payload.position.extend(1.0));
+        image.write(pos, prev + color.extend(1.0));
     }
 }
 

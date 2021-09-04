@@ -13,6 +13,7 @@ use ash::{
     vk::{self},
 };
 
+use glam::vec3;
 use rand::prelude::*;
 
 #[repr(C)]
@@ -472,17 +473,7 @@ fn main() {
     };
 
     let (instance_count, instance_buffer) = {
-        let transform: [f32; 12] = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0];
-
-        let instances = vec![vk::AccelerationStructureInstanceKHR {
-            transform: vk::TransformMatrixKHR { matrix: transform },
-            instance_custom_index_and_mask: 0xff << 24 | 3,
-            instance_shader_binding_table_record_offset_and_flags:
-                vk::GeometryInstanceFlagsKHR::TRIANGLE_FACING_CULL_DISABLE.as_raw() << 24 | 0,
-            acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
-                device_handle: sphere_accel_handle,
-            },
-        }];
+        let instances = sample_scene(sphere_accel_handle);
 
         let instance_buffer_size =
             std::mem::size_of::<vk::AccelerationStructureInstanceKHR>() * instances.len();
@@ -1646,4 +1637,39 @@ unsafe fn get_buffer_device_address(device: &ash::Device, buffer: vk::Buffer) ->
         .build();
 
     device.get_buffer_device_address(&buffer_device_address_info)
+}
+
+fn create_sphere_instance(
+    pos: glam::Vec3,
+    size: f32,
+    id: u32,
+    sphere_accel_handle: u64,
+) -> vk::AccelerationStructureInstanceKHR {
+    vk::AccelerationStructureInstanceKHR {
+        transform: vk::TransformMatrixKHR {
+            matrix: [
+                size, 0.0, 0.0, pos.x, 0.0, size, 0.0, pos.y, 0.0, 0.0, size, pos.z,
+            ],
+        },
+        instance_custom_index_and_mask: 0xff << 24 | id,
+        instance_shader_binding_table_record_offset_and_flags:
+            vk::GeometryInstanceFlagsKHR::TRIANGLE_FACING_CULL_DISABLE.as_raw() << 24 | 0,
+        acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
+            device_handle: sphere_accel_handle,
+        },
+    }
+}
+
+fn sample_scene(sphere_accel_handle: u64) -> Vec<vk::AccelerationStructureInstanceKHR> {
+    // let mut rng = StdRng::from_entropy();
+    let mut world = Vec::new();
+
+    world.push(create_sphere_instance(
+        vec3(0.0, -1000.0, 0.0),
+        1000.0,
+        0,
+        sphere_accel_handle,
+    ));
+
+    world
 }
