@@ -1645,11 +1645,16 @@ fn main() {
     }
 
     unsafe {
+        acceleration_structure.destroy_acceleration_structure(top_as, None);
+        top_as_buffer.destroy(&device);
+
         acceleration_structure.destroy_acceleration_structure(bottom_as, None);
         bottom_as_buffer.destroy(&device);
 
-        acceleration_structure.destroy_acceleration_structure(top_as, None);
-        top_as_buffer.destroy(&device);
+        acceleration_structure.destroy_acceleration_structure(bottom_as_sphere, None);
+        bottom_as_sphere_buffer.destroy(&device);
+
+        aabb_buffer.destroy(&device);
 
         device.destroy_image_view(image_view, None);
         device.destroy_image(image, None);
