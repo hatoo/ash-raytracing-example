@@ -28,14 +28,14 @@ pub trait Material {
 #[derive(Clone, Copy, Default)]
 #[repr(C)]
 pub struct EnumMaterialData {
-    pub v0: Vec4,
+    v0: Vec4,
 }
 
 #[derive(Clone, Copy, Default)]
 #[repr(C)]
 pub struct EnumMaterial {
-    pub data: EnumMaterialData,
-    pub t: u32,
+    data: EnumMaterialData,
+    t: u32,
 }
 
 struct Lambertian<'a> {

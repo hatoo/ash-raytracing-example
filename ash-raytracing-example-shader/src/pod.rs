@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use spirv_std::glam::{vec3, Vec3};
+use spirv_std::glam::Vec3;
 #[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 

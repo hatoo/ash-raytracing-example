@@ -8,7 +8,7 @@
 
 use crate::bool::Bool32;
 use camera::Camera;
-use material::{EnumMaterial, EnumMaterialData, Material, Scatter};
+use material::{EnumMaterial, Material, Scatter};
 use rand::DefaultRng;
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
@@ -17,7 +17,7 @@ use spirv_std::macros::spirv;
 use spirv_std::num_traits::Float;
 use spirv_std::{
     arch::report_intersection,
-    glam::{uvec2, vec2, vec3, vec4, UVec3, Vec2, Vec3, Vec4},
+    glam::{uvec2, vec3, vec4, UVec3, Vec3, Vec4},
     image::Image,
     ray_tracing::{AccelerationStructure, RayFlags},
 };
