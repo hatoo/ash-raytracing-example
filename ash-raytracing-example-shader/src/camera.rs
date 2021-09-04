@@ -5,6 +5,7 @@ use spirv_std::num_traits::Float;
 
 use crate::math::random_in_unit_disk;
 use crate::rand::DefaultRng;
+use crate::Ray;
 
 #[derive(Copy, Clone)]
 pub struct Camera {
@@ -55,15 +56,15 @@ impl Camera {
         }
     }
 
-    pub fn get_ray(&self, s: f32, t: f32, rng: &mut DefaultRng) -> (Vec3, Vec3) {
+    pub fn get_ray(&self, s: f32, t: f32, rng: &mut DefaultRng) -> Ray {
         let rd = self.lens_radius * random_in_unit_disk(rng);
         let offset = self.u * rd.x + self.v * rd.y;
 
-        (
-            self.origin + offset,
-            (self.lower_left_corner + s * self.horizontal + t * self.vertical
+        Ray {
+            origin: self.origin + offset,
+            direction: (self.lower_left_corner + s * self.horizontal + t * self.vertical
                 - self.origin
                 - offset),
-        )
+        }
     }
 }

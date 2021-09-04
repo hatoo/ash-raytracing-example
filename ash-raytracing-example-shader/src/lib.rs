@@ -6,6 +6,7 @@
 )]
 #![feature(macro_attributes_in_derive_output)]
 
+use crate::bool::Bool32;
 use camera::Camera;
 use rand::DefaultRng;
 #[cfg(not(target_arch = "spirv"))]
@@ -24,6 +25,39 @@ pub mod bool;
 pub mod camera;
 pub mod math;
 pub mod rand;
+
+#[derive(Clone, Copy, Default)]
+pub struct Ray {
+    pub origin: Vec3,
+    pub direction: Vec3,
+}
+#[derive(Clone, Default)]
+pub struct RayPayload {
+    pub position: Vec3,
+    pub normal: Vec3,
+    pub is_miss: Bool32,
+    pub material: u32,
+    pub front_face: Bool32,
+}
+
+impl RayPayload {
+    pub fn new(position: Vec3, outward_normal: Vec3, ray_direction: Vec3, material: u32) -> Self {
+        let front_face = ray_direction.dot(outward_normal) < 0.0;
+        let normal = if front_face {
+            outward_normal
+        } else {
+            -outward_normal
+        };
+
+        Self {
+            position,
+            normal,
+            is_miss: Bool32::FALSE,
+            front_face: front_face.into(),
+            material,
+        }
+    }
+}
 
 pub struct PushConstants {
     seed: u32,
@@ -54,13 +88,6 @@ pub fn main_vs(
     ][vert_id as usize];
 }
 
-#[derive(Default)]
-pub struct RayPayload {
-    is_miss: u32,
-    position: Vec3,
-    normal: Vec3,
-}
-
 #[spirv(miss)]
 pub fn main_miss(
     #[spirv(world_ray_direction)] world_ray_direction: Vec3,
@@ -71,10 +98,10 @@ pub fn main_miss(
     let color = vec3(1.0, 1.0, 1.0).lerp(vec3(0.5, 0.7, 1.0), t);
 
     *out = RayPayload {
-        is_miss: 1,
+        is_miss: Bool32::TRUE,
         position: color,
-        normal: Vec3::ZERO,
-    }
+        ..Default::default()
+    };
 }
 
 #[spirv(closest_hit)]
@@ -111,7 +138,7 @@ pub fn main_ray_generation(
     let u = (launch_id.x as f32 + rng.next_f32()) / (launch_size.x - 1) as f32;
     let v = (launch_id.y as f32 + rng.next_f32()) / (launch_size.y - 1) as f32;
 
-    let (origin, direction) = camera.get_ray(u, v, &mut rng);
+    let ray = camera.get_ray(u, v, &mut rng);
 
     let cull_mask = 0xff;
     let tmin = 0.001;
@@ -128,19 +155,19 @@ pub fn main_ray_generation(
                 0,
                 0,
                 0,
-                origin,
+                ray.origin,
                 tmin,
-                direction,
+                ray.direction,
                 tmax,
                 payload,
             );
         }
 
-        if payload.is_miss == 0 {
-            color *= vec3(1.0, 0.0, 0.0);
+        if payload.is_miss.0 == 1 {
+            color *= payload.position;
             break;
         } else {
-            color *= payload.position;
+            color *= vec3(1.0, 0.0, 0.0);
             break;
         }
     }
@@ -233,11 +260,9 @@ impl Default for Affine3 {
 pub fn sphere_closest_hit(
     #[spirv(hit_attribute)] hit_pos: &Vec3,
     #[spirv(object_to_world)] object_to_world: Affine3,
+    #[spirv(world_ray_direction)] world_ray_direction: Vec3,
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
 ) {
-    *out = RayPayload {
-        is_miss: 0,
-        position: object_to_world.w,
-        normal: *hit_pos - object_to_world.w,
-    };
+    let normal = (*hit_pos - object_to_world.w).normalize();
+    *out = RayPayload::new(*hit_pos, normal, world_ray_direction, 0);
 }
