@@ -6,9 +6,12 @@
 )]
 #![feature(macro_attributes_in_derive_output)]
 
+use camera::Camera;
+use rand::DefaultRng;
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
 
+#[allow(unused_imports)]
 use spirv_std::num_traits::Float;
 use spirv_std::{
     arch::report_intersection,
@@ -17,8 +20,13 @@ use spirv_std::{
     ray_tracing::{AccelerationStructure, RayFlags},
 };
 
+pub mod bool;
+pub mod camera;
+pub mod math;
+pub mod rand;
+
 pub struct PushConstants {
-    x: f32,
+    seed: u32,
 }
 
 #[spirv(fragment)]
@@ -87,14 +95,24 @@ pub fn main_ray_generation(
     #[spirv(descriptor_set = 0, binding = 1)] image: &Image!(2D, format=rgba32f, sampled=false),
     #[spirv(ray_payload)] payload: &mut RayPayload,
 ) {
-    let pixel_center = vec2(launch_id.x as f32, launch_id.y as f32) + vec2(0.5, 0.5);
-    let in_uv = pixel_center / vec2(launch_size.x as f32, launch_size.y as f32);
+    let rand_seed = (launch_id.y * launch_size.x + launch_id.x) ^ constants.seed;
+    let mut rng = DefaultRng::new(rand_seed);
 
-    let d = in_uv * 2.0 - Vec2::ONE;
-    let aspect_ratio = launch_size.x as f32 / launch_size.y as f32;
+    let camera = Camera::new(
+        vec3(13.0, 2.0, 3.0),
+        vec3(0.0, 0.0, 0.0),
+        vec3(0.0, 1.0, 0.0),
+        20.0 / 180.0 * core::f32::consts::PI,
+        launch_size.x as f32 / launch_size.y as f32,
+        0.1,
+        10.0,
+    );
 
-    let origin = vec3(0.0, 0.0, -2.0);
-    let direction = vec3(d.x * aspect_ratio, -d.y, 1.0).normalize();
+    let u = (launch_id.x as f32 + rng.next_f32()) / (launch_size.x - 1) as f32;
+    let v = (launch_id.y as f32 + rng.next_f32()) / (launch_size.y - 1) as f32;
+
+    let (origin, direction) = camera.get_ray(u, v, &mut rng);
+
     let cull_mask = 0xff;
     let tmin = 0.001;
     let tmax = 1000.0;
@@ -120,7 +138,7 @@ pub fn main_ray_generation(
     let prev: Vec4 = image.read(pos);
 
     unsafe {
-        image.write(pos, prev + (payload.position * constants.x).extend(1.0));
+        image.write(pos, prev + payload.position.extend(1.0));
     }
 }
 

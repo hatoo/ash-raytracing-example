@@ -13,6 +13,8 @@ use ash::{
     vk::{self},
 };
 
+use rand::prelude::*;
+
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 struct Vertex {
@@ -21,8 +23,8 @@ struct Vertex {
 
 fn main() {
     const ENABLE_VALIDATION_LAYER: bool = cfg!(debug_assertions);
-    const WIDTH: u32 = 800;
-    const HEIGHT: u32 = 600;
+    const WIDTH: u32 = 1200;
+    const HEIGHT: u32 = 800;
     const COLOR_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
 
     const N_SAMPLES: u32 = 1000;
@@ -1057,6 +1059,7 @@ fn main() {
             )
             .build();
 
+        let mut rng = StdRng::from_entropy();
         let mut sampled = 0;
 
         while sampled < N_SAMPLES {
@@ -1115,7 +1118,7 @@ fn main() {
                         pipeline_layout,
                         vk::ShaderStageFlags::RAYGEN_KHR,
                         0,
-                        &1.0f32.to_le_bytes(),
+                        &rng.next_u32().to_le_bytes(),
                     );
 
                     rt_pipeline.cmd_trace_rays(
