@@ -29,7 +29,7 @@ fn main() {
     const HEIGHT: u32 = 800;
     const COLOR_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
 
-    const N_SAMPLES: u32 = 1000;
+    const N_SAMPLES: u32 = 5000;
     const N_SAMPLES_ITER: u32 = 100;
 
     let validation_layers: Vec<CString> = if ENABLE_VALIDATION_LAYER {
@@ -1668,12 +1668,70 @@ fn sample_scene(
     Vec<vk::AccelerationStructureInstanceKHR>,
     Vec<EnumMaterialPod>,
 ) {
-    // let mut rng = StdRng::from_entropy();
+    let mut rng = StdRng::from_entropy();
     let mut world = Vec::new();
 
     world.push((
         create_sphere_instance(vec3(0.0, -1000.0, 0.0), 1000.0, sphere_accel_handle),
         EnumMaterialPod::new_lambertian(vec3(0.5, 0.5, 0.5)),
+    ));
+
+    for a in -11..11 {
+        for b in -11..11 {
+            let center = vec3(
+                a as f32 + 0.9 * rng.gen::<f32>(),
+                0.2,
+                b as f32 + 0.9 * rng.gen::<f32>(),
+            );
+
+            let choose_mat: f32 = rng.gen();
+
+            if (center - vec3(4.0, 0.2, 0.0)).length() > 0.9 {
+                match choose_mat {
+                    x if x < 0.8 => {
+                        let albedo = vec3(rng.gen(), rng.gen(), rng.gen())
+                            * vec3(rng.gen(), rng.gen(), rng.gen());
+
+                        world.push((
+                            create_sphere_instance(center, 0.3, sphere_accel_handle),
+                            EnumMaterialPod::new_lambertian(albedo),
+                        ));
+                    }
+                    x if x < 0.95 => {
+                        let albedo = vec3(
+                            rng.gen_range(0.5..1.0),
+                            rng.gen_range(0.5..1.0),
+                            rng.gen_range(0.5..1.0),
+                        );
+                        let fuzz = rng.gen_range(0.0..0.5);
+
+                        world.push((
+                            create_sphere_instance(center, 0.2, sphere_accel_handle),
+                            EnumMaterialPod::new_metal(albedo, fuzz),
+                        ));
+                    }
+                    _ => world.push((
+                        create_sphere_instance(center, 0.2, sphere_accel_handle),
+                        EnumMaterialPod::new_dielectric(1.5),
+                    )),
+                }
+            }
+        }
+    }
+
+    world.push((
+        create_sphere_instance(vec3(0.0, 1.0, 0.0), 1.0, sphere_accel_handle),
+        EnumMaterialPod::new_dielectric(1.5),
+    ));
+
+    world.push((
+        create_sphere_instance(vec3(-4.0, 1.0, 0.0), 1.0, sphere_accel_handle),
+        EnumMaterialPod::new_lambertian(vec3(0.4, 0.2, 0.1)),
+    ));
+
+    world.push((
+        create_sphere_instance(vec3(4.0, 1.0, 0.0), 1.0, sphere_accel_handle),
+        EnumMaterialPod::new_metal(vec3(0.7, 0.6, 0.5), 0.0),
     ));
 
     let mut spheres = Vec::new();
