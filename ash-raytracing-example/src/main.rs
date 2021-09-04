@@ -179,6 +179,7 @@ fn main() {
     let command_pool = {
         let command_pool_create_info = vk::CommandPoolCreateInfo::builder()
             .queue_family_index(queue_family_index)
+            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
             .build();
 
         unsafe { device.create_command_pool(&command_pool_create_info, None) }
@@ -1066,20 +1067,20 @@ fn main() {
         let mut rng = StdRng::from_entropy();
         let mut sampled = 0;
 
+        let command_buffer = {
+            let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+                .command_buffer_count(1)
+                .command_pool(command_pool)
+                .level(vk::CommandBufferLevel::PRIMARY)
+                .build();
+
+            unsafe { device.allocate_command_buffers(&command_buffer_allocate_info) }
+                .expect("Failed to allocate Command Buffers!")[0]
+        };
+
         while sampled < N_SAMPLES {
             let samples = std::cmp::min(N_SAMPLES - sampled, N_SAMPLES_ITER);
             sampled += samples;
-
-            let command_buffer = {
-                let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
-                    .command_buffer_count(1)
-                    .command_pool(command_pool)
-                    .level(vk::CommandBufferLevel::PRIMARY)
-                    .build();
-
-                unsafe { device.allocate_command_buffers(&command_buffer_allocate_info) }
-                    .expect("Failed to allocate Command Buffers!")[0]
-            };
 
             {
                 let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
@@ -1145,17 +1146,15 @@ fn main() {
                     .build()];
 
                 device
-                    .reset_fences(&[fence])
-                    .expect("Failed to reset Fence!");
-
-                device
-                    .queue_submit(graphics_queue, &submit_infos, fence)
+                    .queue_submit(graphics_queue, &submit_infos, vk::Fence::null())
                     .expect("Failed to execute queue submit.");
 
-                device.wait_for_fences(&[fence], true, u64::MAX).unwrap();
-                device.free_command_buffers(command_pool, &[command_buffer]);
+                device.queue_wait_idle(graphics_queue).unwrap();
             }
             eprint!("\rSamples: {} / {} ", sampled, N_SAMPLES);
+        }
+        unsafe {
+            device.free_command_buffers(command_pool, &[command_buffer]);
         }
         eprint!("\nDone");
     }
