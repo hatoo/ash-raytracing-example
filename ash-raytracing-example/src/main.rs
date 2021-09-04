@@ -743,7 +743,7 @@ fn main() {
                 &[vk::RayTracingPipelineCreateInfoKHR::builder()
                     .stages(&shader_stages)
                     .groups(&shader_groups)
-                    .max_pipeline_ray_recursion_depth(10)
+                    .max_pipeline_ray_recursion_depth(1)
                     .layout(pipeline_layout)
                     .build()],
                 None,
