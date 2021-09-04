@@ -23,6 +23,7 @@ use spirv_std::{
 
 pub mod bool;
 pub mod camera;
+pub mod material;
 pub mod math;
 pub mod rand;
 
