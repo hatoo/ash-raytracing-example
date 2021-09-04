@@ -27,15 +27,15 @@ pub trait Material {
 
 #[derive(Clone, Copy, Default)]
 #[repr(C)]
-struct EnumMaterialData {
-    v0: Vec4,
+pub struct EnumMaterialData {
+    pub v0: Vec4,
 }
 
 #[derive(Clone, Copy, Default)]
 #[repr(C)]
 pub struct EnumMaterial {
-    data: EnumMaterialData,
-    t: u32,
+    pub data: EnumMaterialData,
+    pub t: u32,
 }
 
 struct Lambertian<'a> {
@@ -83,7 +83,7 @@ impl<'a> Material for Lambertian<'a> {
     ) -> Bool32 {
         let scatter_direction = ray_payload.normal + random_in_unit_sphere(rng).normalize();
 
-        let scatter_direction = if scatter_direction.is_near_zero().into() {
+        let scatter_direction = if scatter_direction.is_near_zero().0 == 1 {
             ray_payload.normal
         } else {
             scatter_direction
@@ -151,7 +151,7 @@ impl<'a> Material for Dielectric<'a> {
         rng: &mut DefaultRng,
         scatter: &mut Scatter,
     ) -> Bool32 {
-        let refraction_ratio = if ray_payload.front_face.into() {
+        let refraction_ratio = if ray_payload.front_face.0 == 1 {
             1.0 / self.ir()
         } else {
             self.ir()
@@ -166,7 +166,8 @@ impl<'a> Material for Dielectric<'a> {
             .or(Bool32::new(
                 reflectance(cos_theta, refraction_ratio) > rng.next_f32(),
             ))
-            .into()
+            .0
+            == 1
         {
             reflect(unit_direction, ray_payload.normal)
         } else {

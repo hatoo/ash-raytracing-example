@@ -1,6 +1,7 @@
 use core::ops::Not;
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
+#[repr(transparent)]
 pub struct Bool32(pub u32);
 
 impl Bool32 {
@@ -35,6 +36,7 @@ impl Not for Bool32 {
 }
 
 impl Into<bool> for Bool32 {
+    #[inline]
     fn into(self) -> bool {
         self == Self::TRUE
     }

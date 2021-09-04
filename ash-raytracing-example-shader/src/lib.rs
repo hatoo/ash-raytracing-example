@@ -8,6 +8,7 @@
 
 use crate::bool::Bool32;
 use camera::Camera;
+use material::{EnumMaterial, EnumMaterialData, Material, Scatter};
 use rand::DefaultRng;
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
@@ -139,13 +140,20 @@ pub fn main_ray_generation(
     let u = (launch_id.x as f32 + rng.next_f32()) / (launch_size.x - 1) as f32;
     let v = (launch_id.y as f32 + rng.next_f32()) / (launch_size.y - 1) as f32;
 
-    let ray = camera.get_ray(u, v, &mut rng);
-
     let cull_mask = 0xff;
     let tmin = 0.001;
     let tmax = 1000.0;
 
     let mut color = vec3(1.0, 1.0, 1.0);
+
+    let material = EnumMaterial {
+        data: EnumMaterialData {
+            v0: vec4(0.5, 0.5, 0.5, 0.0),
+        },
+        t: 0,
+    };
+
+    let mut ray = camera.get_ray(u, v, &mut rng);
 
     for _ in 0..50 {
         *payload = RayPayload::default();
@@ -168,8 +176,13 @@ pub fn main_ray_generation(
             color *= payload.position;
             break;
         } else {
-            color *= vec3(1.0, 0.0, 0.0);
-            break;
+            let mut scatter = Scatter::default();
+            if material.scatter(&ray, payload, &mut rng, &mut scatter).0 == 1 {
+                color *= scatter.color;
+                ray = scatter.ray;
+            } else {
+                break;
+            }
         }
     }
 
