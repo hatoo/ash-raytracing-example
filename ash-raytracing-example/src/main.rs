@@ -13,6 +13,7 @@ use ash::{
     vk::{self},
 };
 
+use ash_raytracing_example_shader::pod::EnumMaterialPod;
 use glam::vec3;
 use rand::prelude::*;
 
@@ -472,8 +473,10 @@ fn main() {
         unsafe { acceleration_structure.get_acceleration_structure_device_address(&as_addr_info) }
     };
 
+    let (sphere_instances, materials) = sample_scene(sphere_accel_handle);
+
     let (instance_count, instance_buffer) = {
-        let instances = sample_scene(sphere_accel_handle);
+        let instances = sphere_instances;
 
         let instance_buffer_size =
             std::mem::size_of::<vk::AccelerationStructureInstanceKHR>() * instances.len();
@@ -653,7 +656,7 @@ fn main() {
                         vk::DescriptorSetLayoutBinding::builder()
                             .descriptor_count(1)
                             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+                            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                             .binding(2)
                             .build(),
                     ])
@@ -805,9 +808,9 @@ fn main() {
     };
 
     let color_buffer = {
-        let color: [f32; 12] = [1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0];
+        let color = materials;
 
-        let buffer_size = (std::mem::size_of::<f32>() * 12) as vk::DeviceSize;
+        let buffer_size = bytemuck::cast_slice::<_, u8>(&color).len() as vk::DeviceSize;
 
         let mut color_buffer = BufferResource::new(
             buffer_size,
@@ -1642,7 +1645,6 @@ unsafe fn get_buffer_device_address(device: &ash::Device, buffer: vk::Buffer) ->
 fn create_sphere_instance(
     pos: glam::Vec3,
     size: f32,
-    id: u32,
     sphere_accel_handle: u64,
 ) -> vk::AccelerationStructureInstanceKHR {
     vk::AccelerationStructureInstanceKHR {
@@ -1651,7 +1653,7 @@ fn create_sphere_instance(
                 size, 0.0, 0.0, pos.x, 0.0, size, 0.0, pos.y, 0.0, 0.0, size, pos.z,
             ],
         },
-        instance_custom_index_and_mask: 0xff << 24 | id,
+        instance_custom_index_and_mask: 0xff << 24,
         instance_shader_binding_table_record_offset_and_flags:
             vk::GeometryInstanceFlagsKHR::TRIANGLE_FACING_CULL_DISABLE.as_raw() << 24 | 0,
         acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
@@ -1660,16 +1662,28 @@ fn create_sphere_instance(
     }
 }
 
-fn sample_scene(sphere_accel_handle: u64) -> Vec<vk::AccelerationStructureInstanceKHR> {
+fn sample_scene(
+    sphere_accel_handle: u64,
+) -> (
+    Vec<vk::AccelerationStructureInstanceKHR>,
+    Vec<EnumMaterialPod>,
+) {
     // let mut rng = StdRng::from_entropy();
     let mut world = Vec::new();
 
-    world.push(create_sphere_instance(
-        vec3(0.0, -1000.0, 0.0),
-        1000.0,
-        0,
-        sphere_accel_handle,
+    world.push((
+        create_sphere_instance(vec3(0.0, -1000.0, 0.0), 1000.0, sphere_accel_handle),
+        EnumMaterialPod::new_lambertian(vec3(0.5, 0.5, 0.5)),
     ));
 
-    world
+    let mut spheres = Vec::new();
+    let mut materials = Vec::new();
+
+    for (i, (mut sphere, material)) in world.into_iter().enumerate() {
+        sphere.instance_custom_index_and_mask |= i as u32;
+        spheres.push(sphere);
+        materials.push(material);
+    }
+
+    (spheres, materials)
 }

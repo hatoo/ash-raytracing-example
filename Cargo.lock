@@ -39,8 +39,9 @@ name = "ash-raytracing-example"
 version = "0.1.0"
 dependencies = [
  "ash",
+ "ash-raytracing-example-shader",
  "bytemuck",
- "glam 0.18.0",
+ "glam",
  "png",
  "rand",
  "spirv-builder",
@@ -50,6 +51,7 @@ dependencies = [
 name = "ash-raytracing-example-shader"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "spirv-std",
 ]
 
@@ -76,6 +78,20 @@ name = "bytemuck"
 version = "1.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72957246c41db82b8ef88a5486143830adeb8227ef9837740bdec67724cf2c5b"
+dependencies = [
+ "bytemuck_derive",
+]
+
+[[package]]
+name = "bytemuck_derive"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e215f8c2f9f79cb53c8335e687ffd07d5bfcb6fe5fc80723762d0be46e7cc54"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "byteorder"
@@ -164,12 +180,6 @@ checksum = "e01732b97afd8508eee3333a541b9f7610f454bb818669e66e90f5f57c93a776"
 dependencies = [
  "num-traits",
 ]
-
-[[package]]
-name = "glam"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "525a3e490ba77b8e326fb67d4b44b4bd2f920f44d4cc73ccec50adc68e3bee34"
 
 [[package]]
 name = "hashbrown"
@@ -528,7 +538,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92d4cbd1d832ac4ace6ef46f9b10b682c2d538d6a18a0546babdcc2d370b12ad"
 dependencies = [
  "bitflags",
- "glam 0.17.3",
+ "glam",
  "num-traits",
  "spirv-std-macros",
  "spirv-types",

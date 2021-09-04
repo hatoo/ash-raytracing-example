@@ -26,6 +26,7 @@ pub mod bool;
 pub mod camera;
 pub mod material;
 pub mod math;
+pub mod pod;
 pub mod rand;
 
 #[derive(Clone, Copy, Default)]
@@ -122,6 +123,7 @@ pub fn main_ray_generation(
     #[spirv(push_constant)] constants: &PushConstants,
     #[spirv(descriptor_set = 0, binding = 0)] top_level_as: &AccelerationStructure,
     #[spirv(descriptor_set = 0, binding = 1)] image: &Image!(2D, format=rgba32f, sampled=false),
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] materials: &[EnumMaterial],
     #[spirv(ray_payload)] payload: &mut RayPayload,
 ) {
     let rand_seed = (launch_id.y * launch_size.x + launch_id.x) ^ constants.seed;
@@ -142,16 +144,9 @@ pub fn main_ray_generation(
 
     let cull_mask = 0xff;
     let tmin = 0.001;
-    let tmax = 1000.0;
+    let tmax = 100000.0;
 
     let mut color = vec3(1.0, 1.0, 1.0);
-
-    let material = EnumMaterial {
-        data: EnumMaterialData {
-            v0: vec4(0.5, 0.5, 0.5, 0.0),
-        },
-        t: 0,
-    };
 
     let mut ray = camera.get_ray(u, v, &mut rng);
 
@@ -177,7 +172,11 @@ pub fn main_ray_generation(
             break;
         } else {
             let mut scatter = Scatter::default();
-            if material.scatter(&ray, payload, &mut rng, &mut scatter).0 == 1 {
+            if materials[payload.material as usize]
+                .scatter(&ray, payload, &mut rng, &mut scatter)
+                .0
+                == 1
+            {
                 color *= scatter.color;
                 ray = scatter.ray;
             } else {
@@ -276,7 +275,8 @@ pub fn sphere_closest_hit(
     #[spirv(object_to_world)] object_to_world: Affine3,
     #[spirv(world_ray_direction)] world_ray_direction: Vec3,
     #[spirv(incoming_ray_payload)] out: &mut RayPayload,
+    #[spirv(instance_custom_index)] instance_custom_index: u32,
 ) {
     let normal = (*hit_pos - object_to_world.w).normalize();
-    *out = RayPayload::new(*hit_pos, normal, world_ray_direction, 0);
+    *out = RayPayload::new(*hit_pos, normal, world_ray_direction, instance_custom_index);
 }
