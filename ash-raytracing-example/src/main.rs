@@ -476,7 +476,7 @@ fn main() {
             transform: vk::TransformMatrixKHR { matrix: transform },
             instance_custom_index_and_mask: 0xff << 24 | 3,
             instance_shader_binding_table_record_offset_and_flags:
-                vk::GeometryInstanceFlagsKHR::TRIANGLE_FACING_CULL_DISABLE.as_raw() << 24 | 1,
+                vk::GeometryInstanceFlagsKHR::TRIANGLE_FACING_CULL_DISABLE.as_raw() << 24 | 0,
             acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
                 device_handle: sphere_accel_handle,
             },
@@ -632,7 +632,7 @@ fn main() {
         (top_as, top_as_buffer)
     };
 
-    let (descriptor_set_layout, graphics_pipeline, pipeline_layout) = {
+    let (descriptor_set_layout, graphics_pipeline, pipeline_layout, shader_groups_len) = {
         let mut binding_flags = vk::DescriptorSetLayoutBindingFlagsCreateInfoEXT::builder()
             .binding_flags(&[
                 vk::DescriptorBindingFlagsEXT::empty(),
@@ -702,25 +702,18 @@ fn main() {
             // group1 = [ miss ]
             vk::RayTracingShaderGroupCreateInfoKHR::builder()
                 .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
-                .general_shader(2)
+                .general_shader(1)
                 .closest_hit_shader(vk::SHADER_UNUSED_KHR)
                 .any_hit_shader(vk::SHADER_UNUSED_KHR)
                 .intersection_shader(vk::SHADER_UNUSED_KHR)
                 .build(),
             // group2 = [ chit ]
             vk::RayTracingShaderGroupCreateInfoKHR::builder()
-                .ty(vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP)
-                .general_shader(vk::SHADER_UNUSED_KHR)
-                .closest_hit_shader(1)
-                .any_hit_shader(vk::SHADER_UNUSED_KHR)
-                .intersection_shader(vk::SHADER_UNUSED_KHR)
-                .build(),
-            vk::RayTracingShaderGroupCreateInfoKHR::builder()
                 .ty(vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP)
                 .general_shader(vk::SHADER_UNUSED_KHR)
-                .closest_hit_shader(4)
+                .closest_hit_shader(3)
                 .any_hit_shader(vk::SHADER_UNUSED_KHR)
-                .intersection_shader(3)
+                .intersection_shader(2)
                 .build(),
         ];
 
@@ -729,11 +722,6 @@ fn main() {
                 .stage(vk::ShaderStageFlags::RAYGEN_KHR)
                 .module(shader_module)
                 .name(std::ffi::CStr::from_bytes_with_nul(b"main_ray_generation\0").unwrap())
-                .build(),
-            vk::PipelineShaderStageCreateInfo::builder()
-                .stage(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-                .module(shader_module)
-                .name(std::ffi::CStr::from_bytes_with_nul(b"main_closest_hit\0").unwrap())
                 .build(),
             vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::MISS_KHR)
@@ -771,18 +759,21 @@ fn main() {
             device.destroy_shader_module(shader_module, None);
         }
 
-        (descriptor_set_layout, pipeline, pipeline_layout)
+        (
+            descriptor_set_layout,
+            pipeline,
+            pipeline_layout,
+            shader_groups.len(),
+        )
     };
 
     let shader_binding_table_buffer = {
-        let group_count = 4;
-
         let incoming_table_data = unsafe {
             rt_pipeline.get_ray_tracing_shader_group_handles(
                 graphics_pipeline,
                 0,
-                group_count as u32,
-                group_count * rt_pipeline_properties.shader_group_handle_size as usize,
+                shader_groups_len as u32,
+                shader_groups_len * rt_pipeline_properties.shader_group_handle_size as usize,
             )
         }
         .unwrap();
@@ -792,10 +783,10 @@ fn main() {
             rt_pipeline_properties.shader_group_base_alignment,
         );
 
-        let table_size = group_count * handle_size_aligned as usize;
+        let table_size = shader_groups_len * handle_size_aligned as usize;
         let mut table_data = vec![0u8; table_size];
 
-        for i in 0..group_count {
+        for i in 0..shader_groups_len {
             table_data[i * handle_size_aligned as usize
                 ..i * handle_size_aligned as usize
                     + rt_pipeline_properties.shader_group_handle_size as usize]
@@ -958,7 +949,7 @@ fn main() {
 
         let sbt_hit_region = vk::StridedDeviceAddressRegionKHR::builder()
             .device_address(sbt_address + 2 * handle_size_aligned)
-            .size(2 * handle_size_aligned)
+            .size(handle_size_aligned)
             .stride(handle_size_aligned)
             .build();
 
