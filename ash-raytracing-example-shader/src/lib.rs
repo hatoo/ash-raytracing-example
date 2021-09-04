@@ -46,9 +46,20 @@ pub fn main_vs(
     ][vert_id as usize];
 }
 
+#[derive(Default)]
+pub struct RayPayload {
+    is_miss: u32,
+    position: Vec3,
+    normal: Vec3,
+}
+
 #[spirv(miss)]
-pub fn main_miss(#[spirv(incoming_ray_payload)] out: &mut Vec3) {
-    *out = vec3(0.5, 0.5, 0.5);
+pub fn main_miss(#[spirv(incoming_ray_payload)] out: &mut RayPayload) {
+    *out = RayPayload {
+        is_miss: 1,
+        position: vec3(0.5, 0.5, 0.5),
+        normal: Vec3::ZERO,
+    }
 }
 
 #[spirv(closest_hit)]
@@ -67,7 +78,7 @@ pub fn main_ray_generation(
     #[spirv(push_constant)] constants: &PushConstants,
     #[spirv(descriptor_set = 0, binding = 0)] top_level_as: &AccelerationStructure,
     #[spirv(descriptor_set = 0, binding = 1)] image: &Image!(2D, format=rgba32f, sampled=false),
-    #[spirv(ray_payload)] payload: &mut Vec3,
+    #[spirv(ray_payload)] payload: &mut RayPayload,
 ) {
     let pixel_center = vec2(launch_id.x as f32, launch_id.y as f32) + vec2(0.5, 0.5);
     let in_uv = pixel_center / vec2(launch_size.x as f32, launch_size.y as f32);
@@ -81,7 +92,7 @@ pub fn main_ray_generation(
     let tmin = 0.001;
     let tmax = 1000.0;
 
-    *payload = Vec3::ZERO;
+    *payload = RayPayload::default();
 
     unsafe {
         top_level_as.trace_ray(
@@ -102,7 +113,7 @@ pub fn main_ray_generation(
     let prev: Vec4 = image.read(pos);
 
     unsafe {
-        image.write(pos, prev + (*payload * constants.x).extend(1.0));
+        image.write(pos, prev + (payload.position * constants.x).extend(1.0));
     }
 }
 
@@ -186,7 +197,11 @@ impl Default for Affine3 {
 pub fn sphere_closest_hit(
     #[spirv(hit_attribute)] hit_pos: &Vec3,
     #[spirv(object_to_world)] object_to_world: Affine3,
-    #[spirv(incoming_ray_payload)] out: &mut Vec3,
+    #[spirv(incoming_ray_payload)] out: &mut RayPayload,
 ) {
-    *out = *hit_pos - object_to_world.w;
+    *out = RayPayload {
+        is_miss: 0,
+        position: object_to_world.w,
+        normal: *hit_pos - object_to_world.w,
+    };
 }
