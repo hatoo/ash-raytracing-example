@@ -54,10 +54,17 @@ pub struct RayPayload {
 }
 
 #[spirv(miss)]
-pub fn main_miss(#[spirv(incoming_ray_payload)] out: &mut RayPayload) {
+pub fn main_miss(
+    #[spirv(world_ray_direction)] world_ray_direction: Vec3,
+    #[spirv(incoming_ray_payload)] out: &mut RayPayload,
+) {
+    let unit_direction = world_ray_direction.normalize();
+    let t = 0.5 * (unit_direction.y + 1.0);
+    let color = vec3(1.0, 1.0, 1.0).lerp(vec3(0.5, 0.7, 1.0), t);
+
     *out = RayPayload {
         is_miss: 1,
-        position: vec3(0.5, 0.5, 0.5),
+        position: color,
         normal: Vec3::ZERO,
     }
 }
