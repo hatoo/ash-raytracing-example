@@ -188,5 +188,5 @@ pub fn sphere_closest_hit(
     #[spirv(object_to_world)] object_to_world: Affine3,
     #[spirv(incoming_ray_payload)] out: &mut Vec3,
 ) {
-    *out = object_to_world.w;
+    *out = *hit_pos - object_to_world.w;
 }
