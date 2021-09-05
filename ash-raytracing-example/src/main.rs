@@ -301,15 +301,6 @@ fn main() {
             device.end_command_buffer(command_buffer).unwrap();
         }
 
-        let fence = {
-            let fence_create_info = vk::FenceCreateInfo::builder()
-                .flags(vk::FenceCreateFlags::SIGNALED)
-                .build();
-
-            unsafe { device.create_fence(&fence_create_info, None) }
-                .expect("Failed to create Fence Object!")
-        };
-
         let command_buffers = [command_buffer];
 
         let submit_infos = [vk::SubmitInfo::builder()
@@ -318,15 +309,10 @@ fn main() {
 
         unsafe {
             device
-                .reset_fences(&[fence])
-                .expect("Failed to reset Fence!");
-
-            device
-                .queue_submit(graphics_queue, &submit_infos, fence)
+                .queue_submit(graphics_queue, &submit_infos, vk::Fence::null())
                 .expect("Failed to execute queue submit.");
 
-            device.wait_for_fences(&[fence], true, u64::MAX).unwrap();
-            device.destroy_fence(fence, None);
+            device.queue_wait_idle(graphics_queue).unwrap();
             device.free_command_buffers(command_pool, &[command_buffer]);
         }
     }
@@ -922,15 +908,6 @@ fn main() {
         device.update_descriptor_sets(&[accel_write, image_write, buffers_write], &[]);
     }
 
-    let fence = {
-        let fence_create_info = vk::FenceCreateInfo::builder()
-            .flags(vk::FenceCreateFlags::SIGNALED)
-            .build();
-
-        unsafe { device.create_fence(&fence_create_info, None) }
-            .expect("Failed to create Fence Object!")
-    };
-
     {
         let handle_size_aligned = aligned_size(
             rt_pipeline_properties.shader_group_handle_size,
@@ -1040,14 +1017,10 @@ fn main() {
 
         unsafe {
             device
-                .reset_fences(&[fence])
-                .expect("Failed to reset Fence!");
-
-            device
-                .queue_submit(graphics_queue, &submit_infos, fence)
+                .queue_submit(graphics_queue, &submit_infos, vk::Fence::null())
                 .expect("Failed to execute queue submit.");
 
-            device.wait_for_fences(&[fence], true, u64::MAX).unwrap();
+            device.queue_wait_idle(graphics_queue).unwrap();
             device.free_command_buffers(command_pool, &[command_buffer]);
         }
 
@@ -1333,14 +1306,10 @@ fn main() {
             device.end_command_buffer(copy_cmd).unwrap();
 
             device
-                .reset_fences(&[fence])
-                .expect("Failed to reset Fence!");
-
-            device
-                .queue_submit(graphics_queue, &submit_infos, fence)
+                .queue_submit(graphics_queue, &submit_infos, vk::Fence::null())
                 .expect("Failed to execute queue submit.");
 
-            device.wait_for_fences(&[fence], true, u64::MAX).unwrap();
+            device.queue_wait_idle(graphics_queue).unwrap();
         }
     }
 
@@ -1397,10 +1366,6 @@ fn main() {
     }
 
     // clean up
-
-    unsafe {
-        device.destroy_fence(fence, None);
-    }
 
     unsafe {
         device.destroy_command_pool(command_pool, None);
