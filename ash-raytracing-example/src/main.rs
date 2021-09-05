@@ -99,9 +99,11 @@ fn main() {
     .unwrap();
 
     let device: ash::Device = {
+        let priorities = [1.0];
+
         let queue_create_info = vk::DeviceQueueCreateInfo::builder()
             .queue_family_index(queue_family_index)
-            .queue_priorities(&[1.0])
+            .queue_priorities(&priorities)
             .build();
 
         let mut features2 = vk::PhysicalDeviceFeatures2::default();
@@ -124,6 +126,15 @@ fn main() {
             .ray_tracing_pipeline(true)
             .build();
 
+        let enabled_extension_names = [
+            ash::extensions::khr::RayTracingPipeline::name().as_ptr(),
+            ash::extensions::khr::AccelerationStructure::name().as_ptr(),
+            ash::extensions::khr::DeferredHostOperations::name().as_ptr(),
+            vk::KhrSpirv14Fn::name().as_ptr(),
+            vk::ExtScalarBlockLayoutFn::name().as_ptr(),
+            vk::KhrGetMemoryRequirements2Fn::name().as_ptr(),
+        ];
+
         let device_create_info = vk::DeviceCreateInfo::builder()
             .push_next(&mut features2)
             .push_next(&mut features12)
@@ -131,14 +142,7 @@ fn main() {
             .push_next(&mut raytracing_pipeline)
             .queue_create_infos(&[queue_create_info])
             .enabled_layer_names(validation_layers_ptr.as_slice())
-            .enabled_extension_names(&[
-                ash::extensions::khr::RayTracingPipeline::name().as_ptr(),
-                ash::extensions::khr::AccelerationStructure::name().as_ptr(),
-                ash::extensions::khr::DeferredHostOperations::name().as_ptr(),
-                vk::KhrSpirv14Fn::name().as_ptr(),
-                vk::ExtScalarBlockLayoutFn::name().as_ptr(),
-                vk::KhrGetMemoryRequirements2Fn::name().as_ptr(),
-            ])
+            .enabled_extension_names(&enabled_extension_names)
             .build();
 
         unsafe { instance.create_device(physical_device, &device_create_info, None) }
@@ -296,8 +300,10 @@ fn main() {
                 .expect("Failed to create Fence Object!")
         };
 
+        let command_buffers = [command_buffer];
+
         let submit_infos = [vk::SubmitInfo::builder()
-            .command_buffers(&[command_buffer])
+            .command_buffers(&command_buffers)
             .build()];
 
         unsafe {
