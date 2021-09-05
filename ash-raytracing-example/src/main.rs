@@ -310,8 +310,10 @@ fn main() {
                 .expect("Failed to create Fence Object!")
         };
 
+        let command_buffers = [command_buffer];
+
         let submit_infos = [vk::SubmitInfo::builder()
-            .command_buffers(&[command_buffer])
+            .command_buffers(&command_buffers)
             .build()];
 
         unsafe {
@@ -1030,8 +1032,10 @@ fn main() {
             device.end_command_buffer(command_buffer).unwrap();
         }
 
+        let command_buffers = [command_buffer];
+
         let submit_infos = [vk::SubmitInfo::builder()
-            .command_buffers(&[command_buffer])
+            .command_buffers(&command_buffers)
             .build()];
 
         unsafe {
@@ -1141,8 +1145,10 @@ fn main() {
             unsafe {
                 device.end_command_buffer(command_buffer).unwrap();
 
+                let command_buffers = [command_buffer];
+
                 let submit_infos = [vk::SubmitInfo::builder()
-                    .command_buffers(&[command_buffer])
+                    .command_buffers(&command_buffers)
                     .build()];
 
                 device
