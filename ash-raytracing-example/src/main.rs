@@ -20,7 +20,7 @@ struct Vertex {
 }
 
 fn main() {
-    const ENABLE_VALIDATION_LAYER: bool = cfg!(debug_assertions);
+    const ENABLE_VALIDATION_LAYER: bool = true;
     const WIDTH: u32 = 800;
     const HEIGHT: u32 = 600;
     const COLOR_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
@@ -403,9 +403,11 @@ fn main() {
             .transform_offset(0)
             .build();
 
+        let geometries = [geometry];
+
         let mut build_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
             .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
-            .geometries(&[geometry])
+            .geometries(&geometries)
             .mode(vk::BuildAccelerationStructureModeKHR::BUILD)
             .ty(vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL)
             .build();
@@ -623,9 +625,11 @@ fn main() {
             .geometry(vk::AccelerationStructureGeometryDataKHR { instances })
             .build();
 
+        let geometries = [geometry];
+
         let mut build_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
             .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
-            .geometries(&[geometry])
+            .geometries(&geometries)
             .mode(vk::BuildAccelerationStructureModeKHR::BUILD)
             .ty(vk::AccelerationStructureTypeKHR::TOP_LEVEL)
             .build();
@@ -699,12 +703,14 @@ fn main() {
     };
 
     let (descriptor_set_layout, graphics_pipeline, pipeline_layout, shader_group_count) = {
+        let binding_flags_inner = [
+            vk::DescriptorBindingFlagsEXT::empty(),
+            vk::DescriptorBindingFlagsEXT::empty(),
+            vk::DescriptorBindingFlagsEXT::empty(),
+        ];
+
         let mut binding_flags = vk::DescriptorSetLayoutBindingFlagsCreateInfoEXT::builder()
-            .binding_flags(&[
-                vk::DescriptorBindingFlagsEXT::empty(),
-                vk::DescriptorBindingFlagsEXT::empty(),
-                vk::DescriptorBindingFlagsEXT::empty(),
-            ])
+            .binding_flags(&binding_flags_inner)
             .build();
 
         let descriptor_set_layout = unsafe {
