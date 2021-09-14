@@ -2,6 +2,7 @@
 
 An example of KHR raytracing using [ash](https://github.com/MaikKlein/ash) and [rust-gpu](https://github.com/EmbarkStudios/rust-gpu).
 
+For more advanced example, please see `weekend` branch.
 ## Run
 
 ```bash
