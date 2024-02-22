@@ -1360,17 +1360,20 @@ fn pick_physical_device_and_queue_family_indices(
     Ok(unsafe { instance.enumerate_physical_devices() }?
         .into_iter()
         .find_map(|physical_device| {
-            if unsafe { instance.enumerate_device_extension_properties(physical_device) }.map(
-                |exts| {
-                    let set: HashSet<&CStr> = exts
-                        .iter()
-                        .map(|ext| unsafe { CStr::from_ptr(&ext.extension_name as *const c_char) })
-                        .collect();
+            let has_all_extesions =
+                unsafe { instance.enumerate_device_extension_properties(physical_device) }.map(
+                    |exts| {
+                        let set: HashSet<&CStr> = exts
+                            .iter()
+                            .map(|ext| unsafe {
+                                CStr::from_ptr(&ext.extension_name as *const c_char)
+                            })
+                            .collect();
 
-                    extensions.iter().all(|ext| set.contains(ext))
-                },
-            ) != Ok(true)
-            {
+                        extensions.iter().all(|ext| set.contains(ext))
+                    },
+                );
+            if has_all_extesions != Ok(true) {
                 return None;
             }
 
@@ -1418,6 +1421,7 @@ fn get_memory_type_index(
     0
 }
 
+#[allow(clippy::missing_safety_doc)]
 pub unsafe extern "system" fn default_vulkan_debug_utils_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
