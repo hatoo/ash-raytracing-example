@@ -1507,6 +1507,7 @@ impl BufferResource {
     fn store<T: Copy>(&mut self, data: &[T], device: &ash::Device) {
         unsafe {
             let size = (std::mem::size_of::<T>() * data.len()) as u64;
+            assert!(self.size >= size, "Data size is larger than buffer size.");
             let mapped_ptr = self.map(size, device);
             let mut mapped_slice = Align::new(mapped_ptr, std::mem::align_of::<T>() as u64, size);
             mapped_slice.copy_from_slice(&data);
