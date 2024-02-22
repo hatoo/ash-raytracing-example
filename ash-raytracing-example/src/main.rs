@@ -30,10 +30,19 @@ fn main() {
     } else {
         Vec::new()
     };
+    let extension_names = if ENABLE_VALIDATION_LAYER {
+        vec![vk::ExtDebugUtilsFn::name()]
+    } else {
+        Vec::new()
+    };
     let validation_layers_ptr: Vec<*const i8> = validation_layers
         .iter()
         .map(|c_str| c_str.as_ptr())
         .collect();
+    let extension_name_ptr = extension_names
+        .iter()
+        .map(|ext| ext.as_ptr())
+        .collect::<Vec<_>>();
 
     let entry = unsafe { ash::Entry::load() }.unwrap();
 
@@ -77,7 +86,9 @@ fn main() {
             .enabled_layer_names(validation_layers_ptr.as_slice());
 
         let instance_create_info = if ENABLE_VALIDATION_LAYER {
-            instance_create_info.push_next(&mut debug_utils_create_info)
+            instance_create_info
+                .enabled_extension_names(&extension_name_ptr)
+                .push_next(&mut debug_utils_create_info)
         } else {
             instance_create_info
         }
