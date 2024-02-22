@@ -1252,12 +1252,12 @@ fn main() {
     let mut png_encoder = png::Encoder::new(File::create("out.png").unwrap(), WIDTH, HEIGHT);
 
     png_encoder.set_depth(png::BitDepth::Eight);
-    png_encoder.set_color(png::ColorType::RGBA);
+    png_encoder.set_color(png::ColorType::Rgba);
 
     let mut png_writer = png_encoder
         .write_header()
         .unwrap()
-        .into_stream_writer_with_size((4 * WIDTH) as usize);
+        .into_stream_writer_with_size((4 * WIDTH) as usize).unwrap();
 
     for _ in 0..HEIGHT {
         let row = unsafe { std::slice::from_raw_parts(data, 4 * WIDTH as usize) };
