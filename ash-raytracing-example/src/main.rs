@@ -10,7 +10,7 @@ use std::{
 use ash::{
     prelude::VkResult,
     util::Align,
-    vk::{self},
+    vk::{self, Packed24_8},
 };
 
 #[repr(C)]
@@ -35,7 +35,7 @@ fn main() {
         .map(|c_str| c_str.as_ptr())
         .collect();
 
-    let entry = unsafe { ash::Entry::new() }.unwrap();
+    let entry = unsafe { ash::Entry::load() }.unwrap();
 
     assert_eq!(
         check_validation_layer_support(
@@ -108,9 +108,7 @@ fn main() {
 
         let mut features2 = vk::PhysicalDeviceFeatures2::default();
         unsafe {
-            instance
-                .fp_v1_1()
-                .get_physical_device_features2(physical_device, &mut features2)
+            (instance.fp_v1_1().get_physical_device_features2)(physical_device, &mut features2)
         };
 
         let mut features12 = vk::PhysicalDeviceVulkan12Features::builder()
@@ -141,7 +139,6 @@ fn main() {
             .push_next(&mut as_feature)
             .push_next(&mut raytracing_pipeline)
             .queue_create_infos(&[queue_create_info])
-            .enabled_layer_names(validation_layers_ptr.as_slice())
             .enabled_extension_names(&enabled_extension_names)
             .build();
 
@@ -511,9 +508,11 @@ fn main() {
                 transform: vk::TransformMatrixKHR {
                     matrix: transform_0,
                 },
-                instance_custom_index_and_mask: 0xff << 24,
-                instance_shader_binding_table_record_offset_and_flags:
-                    vk::GeometryInstanceFlagsKHR::TRIANGLE_FACING_CULL_DISABLE.as_raw() << 24,
+                instance_custom_index_and_mask: Packed24_8::new(0, 0xff),
+                instance_shader_binding_table_record_offset_and_flags: Packed24_8::new(
+                    0,
+                    vk::GeometryInstanceFlagsKHR::TRIANGLE_FACING_CULL_DISABLE.as_raw() as u8,
+                ),
                 acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
                     device_handle: accel_handle,
                 },
@@ -522,9 +521,11 @@ fn main() {
                 transform: vk::TransformMatrixKHR {
                     matrix: transform_1,
                 },
-                instance_custom_index_and_mask: 0xff << 24 | 1,
-                instance_shader_binding_table_record_offset_and_flags:
-                    vk::GeometryInstanceFlagsKHR::TRIANGLE_FACING_CULL_DISABLE.as_raw() << 24,
+                instance_custom_index_and_mask: Packed24_8::new(1, 0xff),
+                instance_shader_binding_table_record_offset_and_flags: Packed24_8::new(
+                    0,
+                    vk::GeometryInstanceFlagsKHR::TRIANGLE_FACING_CULL_DISABLE.as_raw() as u8,
+                ),
                 acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
                     device_handle: accel_handle,
                 },
@@ -533,9 +534,11 @@ fn main() {
                 transform: vk::TransformMatrixKHR {
                     matrix: transform_2,
                 },
-                instance_custom_index_and_mask: 0xff << 24 | 2,
-                instance_shader_binding_table_record_offset_and_flags:
-                    vk::GeometryInstanceFlagsKHR::TRIANGLE_FACING_CULL_DISABLE.as_raw() << 24,
+                instance_custom_index_and_mask: Packed24_8::new(2, 0xff),
+                instance_shader_binding_table_record_offset_and_flags: Packed24_8::new(
+                    0,
+                    vk::GeometryInstanceFlagsKHR::TRIANGLE_FACING_CULL_DISABLE.as_raw() as u8,
+                ),
                 acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
                     device_handle: accel_handle,
                 },
@@ -1257,7 +1260,8 @@ fn main() {
     let mut png_writer = png_encoder
         .write_header()
         .unwrap()
-        .into_stream_writer_with_size((4 * WIDTH) as usize).unwrap();
+        .into_stream_writer_with_size((4 * WIDTH) as usize)
+        .unwrap();
 
     for _ in 0..HEIGHT {
         let row = unsafe { std::slice::from_raw_parts(data, 4 * WIDTH as usize) };
