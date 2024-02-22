@@ -1008,7 +1008,7 @@ fn main() {
             unsafe { get_buffer_device_address(&device, shader_binding_table_buffer.buffer) };
 
         let sbt_raygen_region = vk::StridedDeviceAddressRegionKHR::builder()
-            .device_address(sbt_address + 0)
+            .device_address(sbt_address)
             .size(handle_size_aligned)
             .stride(handle_size_aligned)
             .build();
@@ -1020,7 +1020,7 @@ fn main() {
             .build();
 
         let sbt_hit_region = vk::StridedDeviceAddressRegionKHR::builder()
-            .device_address(sbt_address + 1 * handle_size_aligned)
+            .device_address(sbt_address + handle_size_aligned)
             .size(handle_size_aligned)
             .stride(handle_size_aligned)
             .build();
@@ -1407,12 +1407,11 @@ fn get_memory_type_index(
     properties: vk::MemoryPropertyFlags,
 ) -> u32 {
     for i in 0..device_memory_properties.memory_type_count {
-        if (type_bits & 1) == 1 {
-            if (device_memory_properties.memory_types[i as usize].property_flags & properties)
+        if (type_bits & 1) == 1
+            && (device_memory_properties.memory_types[i as usize].property_flags & properties)
                 == properties
-            {
-                return i;
-            }
+        {
+            return i;
         }
         type_bits >>= 1;
     }
@@ -1506,11 +1505,11 @@ impl BufferResource {
 
     fn store<T: Copy>(&mut self, data: &[T], device: &ash::Device) {
         unsafe {
-            let size = (std::mem::size_of::<T>() * data.len()) as u64;
+            let size = std::mem::size_of_val(data) as u64;
             assert!(self.size >= size, "Data size is larger than buffer size.");
             let mapped_ptr = self.map(size, device);
             let mut mapped_slice = Align::new(mapped_ptr, std::mem::align_of::<T>() as u64, size);
-            mapped_slice.copy_from_slice(&data);
+            mapped_slice.copy_from_slice(data);
             self.unmap(device);
         }
     }
