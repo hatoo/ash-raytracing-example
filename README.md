@@ -11,6 +11,8 @@ cargo run
 
 open `out.png`
 
+![out.png](out.png)
+
 ## See also
 
 - [vulkan-tutorial-rust](https://github.com/unknownue/vulkan-tutorial-rust)
