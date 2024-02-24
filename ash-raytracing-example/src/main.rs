@@ -940,7 +940,7 @@ fn main() {
         .descriptor_counts(&[1])
         .build();
 
-    let descriptor_sets = unsafe {
+    let descriptor_set = unsafe {
         device.allocate_descriptor_sets(
             &vk::DescriptorSetAllocateInfo::builder()
                 .descriptor_pool(descriptor_pool)
@@ -949,9 +949,7 @@ fn main() {
                 .build(),
         )
     }
-    .unwrap();
-
-    let descriptor_set = descriptor_sets[0];
+    .unwrap()[0];
 
     let accel_structs = [top_as];
     let mut accel_info = vk::WriteDescriptorSetAccelerationStructureKHR::builder()
